@@ -1,0 +1,6 @@
+{
+  "csvContent": "title,content,category,author\n\"Introduction to Machine Learning\",\"Machine Learning is a subset of artificial intelligence that enables computers to learn and make decisions without being explicitly programmed. It uses algorithms to analyze data, identify patterns, and make predictions or decisions based on the information it processes.\",\"Technology\",\"Alice Johnson\"\n\"Understanding Microservices Architecture\",\"Microservices architecture is a software development approach where applications are built as a collection of loosely coupled, independently deployable services. Each service is responsible for a specific business function and communicates with other services through well-defined APIs.\",\"Technology\",\"Bob Smith\"",
+  "indexName": "tech-docs",
+  "contentColumnName": "content",
+  "source": "sample-tech-articles"
+}

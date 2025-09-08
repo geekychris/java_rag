@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: rag-service
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: llama2
+      embedding:
+        model: llama2
+
+opensearch:
+  host: localhost
+  port: 30920
+  scheme: http
+  connection-timeout: 5000
+  socket-timeout: 60000
+
+rag:
+  default-index-name: documents
+  embedding-dimension: 4096
+  max-search-results: 10
+
+logging:
+  level:
+    com.example.ragservice: DEBUG
+    org.opensearch: INFO
+    org.springframework.ai: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

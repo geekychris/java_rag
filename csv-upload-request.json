@@ -1,0 +1,6 @@
+{
+  "csvContent": "title,content,category,author\n\"Docker Basics\",\"Docker is a containerization platform that allows developers to package applications and their dependencies into lightweight, portable containers.\",\"DevOps\",\"John Smith\"\n\"Kubernetes Overview\",\"Kubernetes is an open-source container orchestration platform that automates deployment, scaling, and management of containerized applications.\",\"DevOps\",\"Jane Doe\"\n\"Python Programming\",\"Python is a high-level, interpreted programming language known for its simplicity and readability. It's widely used in web development, data science, and automation.\",\"Programming\",\"Alice Johnson\"",
+  "indexName": "tech-docs",
+  "contentColumnName": "content", 
+  "source": "csv-import"
+}
