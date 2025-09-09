@@ -5,10 +5,14 @@ import com.example.ragservice.client.dto.CsvUploadRequest;
 import com.example.ragservice.client.exception.RagClientException;
 import com.example.ragservice.dto.SearchResponse;
 import com.example.ragservice.dto.CsvUploadResponse;
+import com.example.ragservice.dto.SummarizationRequest;
+import com.example.ragservice.dto.SummarizationResponse;
 import com.example.ragservice.model.Document;
+import com.example.ragservice.model.SearchResult;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Client interface for interacting with the RAG service.
@@ -111,6 +115,47 @@ public interface RagClient extends AutoCloseable {
      * @throws RagClientException if the operation fails
      */
     String getServiceInfo() throws RagClientException;
+    
+    /**
+     * Generate a summary based on search results and the original query.
+     * 
+     * @param request the summarization request containing query and search results
+     * @return summarization response with the generated summary
+     * @throws RagClientException if the summarization operation fails
+     */
+    SummarizationResponse summarize(SummarizationRequest request) throws RagClientException;
+    
+    /**
+     * Convenience method for summarizing search results.
+     * 
+     * @param query the original search query
+     * @param searchResults the search results to summarize
+     * @return summarization response with the generated summary
+     * @throws RagClientException if the summarization operation fails
+     */
+    SummarizationResponse summarize(String query, List<SearchResult> searchResults) throws RagClientException;
+    
+    /**
+     * Search and summarize in one call - convenience method.
+     * 
+     * @param query the search query
+     * @param indexName the name of the index to search
+     * @return a map containing both search results and summary
+     * @throws RagClientException if the operation fails
+     */
+    Map<String, Object> searchAndSummarize(String query, String indexName) throws RagClientException;
+    
+    /**
+     * Search and summarize in one call with parameters.
+     * 
+     * @param query the search query
+     * @param indexName the name of the index to search
+     * @param maxResults maximum number of results to return
+     * @param minScore minimum similarity score threshold
+     * @return a map containing both search results and summary
+     * @throws RagClientException if the operation fails
+     */
+    Map<String, Object> searchAndSummarize(String query, String indexName, int maxResults, double minScore) throws RagClientException;
     
     /**
      * Close the client and release any resources.

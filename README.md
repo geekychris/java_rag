@@ -56,8 +56,10 @@ Designed for scalability and production deployment, the service supports local d
 - 📄 **Document Ingestion**: Single document and CSV bulk upload
 - 🔍 **Vector Search**: Similarity search using embeddings
 - 🔗 **Hybrid Search**: Combined vector and text search
+- 📝 **AI Summarization**: LLM-powered summaries of search results
 - 📊 **Index Management**: Create, delete, and check index existence
 - 🤖 **AI Integration**: Local Llama model support via Ollama
+- ⚙️ **Configurable Models**: Separate models for embeddings and summarization
 - 📈 **Scalable**: Built on Spring Boot with production-ready patterns
 - 🧪 **Well Tested**: Comprehensive unit and integration tests
 
@@ -277,6 +279,43 @@ Content-Type: application/json
 }
 ```
 
+#### Summarize Search Results
+```bash
+POST /api/rag/summarize
+Content-Type: application/json
+
+{
+  "query": "machine learning algorithms",
+  "searchResults": [
+    {
+      "document": {
+        "id": "1",
+        "content": "Document content here...",
+        "metadata": {"title": "ML Guide"},
+        "source": "tech-docs"
+      },
+      "score": 0.85
+    }
+  ],
+  "maxSummaryLength": 200,
+  "includeSourceReferences": true,
+  "customPrompt": "Focus on practical applications"
+}
+```
+
+#### Search and Summarize (Combined)
+```bash
+POST /api/rag/search-and-summarize
+Content-Type: application/json
+
+{
+  "query": "artificial intelligence applications",
+  "indexName": "documents",
+  "size": 10,
+  "minScore": 0.3
+}
+```
+
 ## Quick Start Guide
 
 ### Option 1: Local Development (Traditional)
@@ -377,6 +416,32 @@ curl -X POST http://localhost:8080/api/rag/search/hybrid \
     "size": 10,
     "minScore": 0.3
   }'
+```
+
+#### 7. Search and Summarize (Combined)
+```bash
+curl -X POST http://localhost:8080/api/rag/search-and-summarize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "machine learning algorithms",
+    "indexName": "tech-docs",
+    "size": 5,
+    "minScore": 0.3
+  }'
+```
+
+**Response includes both search results and AI-generated summary:**
+```json
+{
+  "success": true,
+  "query": "machine learning algorithms",
+  "searchResults": [...],
+  "totalResults": 3,
+  "summary": "Machine learning algorithms are computational methods that enable computers to learn patterns from data. Popular algorithms include neural networks for deep learning, decision trees for classification, and support vector machines for both classification and regression tasks.",
+  "sourceReferences": ["tech-docs", "ml-papers"],
+  "model": "llama2",
+  "processingTimeMs": 2340
+}
 ```
 
 ### Working with Files
@@ -556,6 +621,32 @@ SearchRequest request = SearchRequest.builder()
     .vectorSearch() // or .hybridSearch()
     .build();
 SearchResponse response = client.search(request);
+```
+
+#### Summarization Operations
+```java
+// Search and summarize in one call
+Map<String, Object> result = client.searchAndSummarize("machine learning", "tech-docs");
+System.out.println("Summary: " + result.get("summary"));
+System.out.println("Sources: " + result.get("sourceReferences"));
+
+// Summarize existing search results
+SearchResponse searchResults = client.search("AI algorithms", "tech-docs");
+SummarizationResponse summary = client.summarize("AI algorithms", searchResults.getResults());
+System.out.println("Generated summary: " + summary.getSummary());
+
+// Advanced summarization with custom options
+SummarizationRequest summaryRequest = new SummarizationRequest(
+    "deep learning applications", 
+    searchResults.getResults()
+);
+summaryRequest.setMaxSummaryLength(300);
+summaryRequest.setCustomPrompt("Focus on real-world applications");
+summaryRequest.setIncludeSourceReferences(true);
+
+SummarizationResponse detailedSummary = client.summarize(summaryRequest);
+System.out.println("Custom summary: " + detailedSummary.getSummary());
+System.out.println("Processing time: " + detailedSummary.getProcessingTimeMs() + "ms");
 ```
 
 ### Client Library Features

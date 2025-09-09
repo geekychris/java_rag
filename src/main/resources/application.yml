@@ -23,6 +23,13 @@ rag:
   default-index-name: documents
   embedding-dimension: 4096
   max-search-results: 10
+  summarization:
+    enabled: true
+    model: llama2
+    max-input-tokens: 8000
+    max-output-tokens: 1000
+    temperature: 0.3
+    system-prompt: "You are an AI assistant that provides concise, accurate summaries based on search results and user queries."
 
 logging:
   level:

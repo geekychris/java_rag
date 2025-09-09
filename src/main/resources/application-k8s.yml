@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://ollama-service:11434}
+      chat:
+        model: llama2
+      embedding:
+        model: llama2
+
+opensearch:
+  host: ${OPENSEARCH_HOST:opensearch-service}
+  port: ${OPENSEARCH_PORT:9200}
+  scheme: http
+
+rag:
+  default-index-name: documents
+  embedding-dimension: ${RAG_EMBEDDING_DIMENSION:4096}
+  max-search-results: ${RAG_MAX_SEARCH_RESULTS:10}
+  summarization:
+    enabled: ${RAG_SUMMARIZATION_ENABLED:true}
+    model: ${RAG_SUMMARIZATION_MODEL:llama2}
+    max-input-tokens: ${RAG_SUMMARIZATION_MAX_INPUT_TOKENS:8000}
+    max-output-tokens: ${RAG_SUMMARIZATION_MAX_OUTPUT_TOKENS:1000}
+    temperature: ${RAG_SUMMARIZATION_TEMPERATURE:0.3}
+    system-prompt: ${RAG_SUMMARIZATION_SYSTEM_PROMPT:You are an AI assistant that provides concise, accurate summaries based on search results and user queries.}
+
+logging:
+  level:
+    com.example.ragservice: INFO
+    org.opensearch: WARN
+    org.springframework.ai: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

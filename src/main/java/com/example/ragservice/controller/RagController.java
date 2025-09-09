@@ -3,9 +3,12 @@ package com.example.ragservice.controller;
 import com.example.ragservice.dto.CsvUploadRequest;
 import com.example.ragservice.dto.DocumentIngestionRequest;
 import com.example.ragservice.dto.SearchRequest;
+import com.example.ragservice.dto.SummarizationRequest;
+import com.example.ragservice.dto.SummarizationResponse;
 import com.example.ragservice.model.Document;
 import com.example.ragservice.model.SearchResult;
 import com.example.ragservice.service.CsvProcessingService;
+import com.example.ragservice.service.SummarizationService;
 import com.example.ragservice.service.VectorStoreService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -29,11 +32,15 @@ public class RagController {
     
     private final VectorStoreService vectorStoreService;
     private final CsvProcessingService csvProcessingService;
+    private final SummarizationService summarizationService;
     
     @Autowired
-    public RagController(VectorStoreService vectorStoreService, CsvProcessingService csvProcessingService) {
+    public RagController(VectorStoreService vectorStoreService, 
+                        CsvProcessingService csvProcessingService,
+                        SummarizationService summarizationService) {
         this.vectorStoreService = vectorStoreService;
         this.csvProcessingService = csvProcessingService;
+        this.summarizationService = summarizationService;
     }
     
     /**
@@ -212,6 +219,102 @@ public class RagController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
+     * Generate a summary based on search results and the original query
+     */
+    @PostMapping("/summarize")
+    public ResponseEntity<SummarizationResponse> summarize(@Valid @RequestBody SummarizationRequest request) {
+        try {
+            logger.info("Received summarization request for query: '{}' with {} search results", 
+                       request.getQuery(), request.getSearchResults().size());
+            
+            SummarizationResponse response = summarizationService.summarize(request);
+            
+            if (response.isSuccess()) {
+                logger.info("Successfully generated summary for query '{}' in {}ms", 
+                           request.getQuery(), response.getProcessingTimeMs());
+                return ResponseEntity.ok(response);
+            } else {
+                logger.warn("Summarization failed for query '{}': {}", 
+                           request.getQuery(), response.getSummary());
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Unexpected error during summarization for query: '{}'", request.getQuery(), e);
+            
+            SummarizationResponse errorResponse = new SummarizationResponse(
+                request.getQuery(),
+                "Error: " + e.getMessage(),
+                false,
+                request.getSearchResults() != null ? request.getSearchResults().size() : 0
+            );
+            errorResponse.setProcessingTimeMs(0L);
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+    
+    /**
+     * Search and summarize in one call - convenience endpoint
+     */
+    @PostMapping("/search-and-summarize")
+    public ResponseEntity<?> searchAndSummarize(@Valid @RequestBody SearchRequest searchRequest) {
+        try {
+            logger.info("Received search-and-summarize request for query: '{}'", searchRequest.getQuery());
+            
+            // First, perform the search
+            List<SearchResult> searchResults = vectorStoreService.searchSimilar(
+                searchRequest.getIndexName(),
+                searchRequest.getQuery(),
+                searchRequest.getSize(),
+                searchRequest.getMinScore()
+            );
+            
+            if (searchResults.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "No search results found to summarize");
+                response.put("query", searchRequest.getQuery());
+                response.put("searchResults", searchResults);
+                response.put("summary", null);
+                return ResponseEntity.ok(response);
+            }
+            
+            // Then, generate the summary
+            SummarizationRequest summaryRequest = new SummarizationRequest(
+                searchRequest.getQuery(),
+                searchResults
+            );
+            summaryRequest.setIncludeSourceReferences(true);
+            
+            SummarizationResponse summaryResponse = summarizationService.summarize(summaryRequest);
+            
+            // Combine search and summary results
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", summaryResponse.isSuccess());
+            response.put("query", searchRequest.getQuery());
+            response.put("searchResults", searchResults);
+            response.put("totalResults", searchResults.size());
+            response.put("summary", summaryResponse.getSummary());
+            response.put("sourceReferences", summaryResponse.getSourceReferences());
+            response.put("model", summaryResponse.getModel());
+            response.put("processingTimeMs", summaryResponse.getProcessingTimeMs());
+            
+            logger.info("Successfully completed search-and-summarize for query '{}'", searchRequest.getQuery());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Search-and-summarize failed for query: {}", searchRequest.getQuery(), e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            response.put("query", searchRequest.getQuery());
             return ResponseEntity.badRequest().body(response);
         }
     }

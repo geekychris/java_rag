@@ -6,7 +6,10 @@ import com.example.ragservice.client.dto.CsvUploadRequest;
 import com.example.ragservice.client.exception.RagClientException;
 import com.example.ragservice.dto.SearchResponse;
 import com.example.ragservice.dto.CsvUploadResponse;
+import com.example.ragservice.dto.SummarizationRequest;
+import com.example.ragservice.dto.SummarizationResponse;
 import com.example.ragservice.model.Document;
+import com.example.ragservice.model.SearchResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -267,6 +270,81 @@ public class RagClientImpl implements RagClient {
         } catch (IOException e) {
             // Log error but don't throw exception in close method
             System.err.println("Error closing HTTP client: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public SummarizationResponse summarize(SummarizationRequest request) throws RagClientException {
+        try {
+            String url = baseUrl + "/api/rag/summarize";
+            HttpPost httpPost = new HttpPost(url);
+            httpPost.setHeader("Content-Type", "application/json");
+            
+            String requestBody = objectMapper.writeValueAsString(request);
+            httpPost.setEntity(new StringEntity(requestBody, ContentType.APPLICATION_JSON));
+            
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                String responseBody = EntityUtils.toString(response.getEntity());
+                
+                if (response.getCode() >= 200 && response.getCode() < 300) {
+                    return objectMapper.readValue(responseBody, SummarizationResponse.class);
+                } else {
+                    throw new RagClientException(
+                        "Summarization request failed with status: " + response.getCode(),
+                        response.getCode(),
+                        responseBody
+                    );
+                }
+            }
+        } catch (IOException | ParseException e) {
+            throw new RagClientException("Failed to execute summarization request", e);
+        }
+    }
+    
+    @Override
+    public SummarizationResponse summarize(String query, List<SearchResult> searchResults) throws RagClientException {
+        SummarizationRequest request = new SummarizationRequest(query, searchResults);
+        request.setIncludeSourceReferences(true);
+        return summarize(request);
+    }
+    
+    @Override
+    public Map<String, Object> searchAndSummarize(String query, String indexName) throws RagClientException {
+        return searchAndSummarize(query, indexName, 10, 0.1);
+    }
+    
+    @Override
+    public Map<String, Object> searchAndSummarize(String query, String indexName, int maxResults, double minScore) throws RagClientException {
+        try {
+            SearchRequest searchRequest = SearchRequest.builder()
+                    .query(query)
+                    .indexName(indexName)
+                    .maxResults(maxResults)
+                    .minScore(minScore)
+                    .build();
+            
+            String url = baseUrl + "/api/rag/search-and-summarize";
+            HttpPost httpPost = new HttpPost(url);
+            httpPost.setHeader("Content-Type", "application/json");
+            
+            String requestBody = objectMapper.writeValueAsString(searchRequest);
+            httpPost.setEntity(new StringEntity(requestBody, ContentType.APPLICATION_JSON));
+            
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                String responseBody = EntityUtils.toString(response.getEntity());
+                
+                if (response.getCode() >= 200 && response.getCode() < 300) {
+                    return objectMapper.readValue(responseBody, new TypeReference<Map<String, Object>>() {});
+                } else {
+                    throw new RagClientException(
+                        "Search-and-summarize request failed with status: " + response.getCode(),
+                        response.getCode(),
+                        responseBody
+                    );
+                }
+            }
+        } catch (IOException | ParseException e) {
+            throw new RagClientException("Failed to execute search-and-summarize request", e);
         }
     }
     
