@@ -1,0 +1,24 @@
+
+
+###
+# curl -X POST http://localhost:8080/api/rag/documents/csv
+#  -H "Content-Type: application/json"
+#  -d "{
+#    \"csvContent\": \"$(cat examples/tech_articles.csv | jq -R -s .)\",
+#    \"indexName\": \"tech-articles\",
+#    \"contentColumnName\": \"content\",
+#    \"source\": \"tech-articles-csv\"
+#  }"
+POST http://localhost:8080/api/rag/documents/csv
+Content-Type: application/json
+
+{
+  "csvContent": "$(cat examples/tech_articles.csv | jq -R -s .)",
+  "indexName": "tech-articles",
+  "contentColumnName": "content",
+  "source": "tech-articles-csv"
+}
+
+###
+
+

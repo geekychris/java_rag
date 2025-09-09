@@ -2,12 +2,17 @@ package com.example.ragservice.controller;
 
 import com.example.ragservice.dto.CsvUploadRequest;
 import com.example.ragservice.dto.DocumentIngestionRequest;
+import com.example.ragservice.dto.EnhancedSearchResponse;
 import com.example.ragservice.dto.SearchRequest;
+import com.example.ragservice.dto.SemanticSummarizationRequest;
+import com.example.ragservice.dto.SemanticSummarizationResponse;
+import com.example.ragservice.dto.SimpleQuerySummarizationRequest;
 import com.example.ragservice.dto.SummarizationRequest;
 import com.example.ragservice.dto.SummarizationResponse;
 import com.example.ragservice.model.Document;
 import com.example.ragservice.model.SearchResult;
 import com.example.ragservice.service.CsvProcessingService;
+import com.example.ragservice.service.SemanticSummarizationService;
 import com.example.ragservice.service.SummarizationService;
 import com.example.ragservice.service.VectorStoreService;
 import jakarta.validation.Valid;
@@ -33,14 +38,17 @@ public class RagController {
     private final VectorStoreService vectorStoreService;
     private final CsvProcessingService csvProcessingService;
     private final SummarizationService summarizationService;
+    private final SemanticSummarizationService semanticSummarizationService;
     
     @Autowired
     public RagController(VectorStoreService vectorStoreService, 
                         CsvProcessingService csvProcessingService,
-                        SummarizationService summarizationService) {
+                        SummarizationService summarizationService,
+                        SemanticSummarizationService semanticSummarizationService) {
         this.vectorStoreService = vectorStoreService;
         this.csvProcessingService = csvProcessingService;
         this.summarizationService = summarizationService;
+        this.semanticSummarizationService = semanticSummarizationService;
     }
     
     /**
@@ -137,7 +145,8 @@ public class RagController {
                 request.getIndexName(),
                 request.getQuery(),
                 request.getSize(),
-                request.getMinScore()
+                request.getMinScore(),
+                request.isIncludeEmbeddings()
             );
             
             Map<String, Object> response = new HashMap<>();
@@ -316,6 +325,98 @@ public class RagController {
             response.put("error", e.getMessage());
             response.put("query", searchRequest.getQuery());
             return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
+     * Simple one-step summarization: query -> search -> summarize
+     * Most common use case with sensible defaults
+     */
+    @PostMapping("/summarize-query")
+    public ResponseEntity<?> summarizeQuery(@Valid @RequestBody SimpleQuerySummarizationRequest request) {
+        try {
+            logger.info("Received simple query summarization request: '{}'", request.getQuery());
+            
+            // Create semantic summarization request with good defaults
+            SemanticSummarizationRequest semanticRequest = new SemanticSummarizationRequest(
+                request.getQuery(), request.getIndexName()
+            );
+            semanticRequest.setMaxResults(request.getMaxResults() != null ? request.getMaxResults() : 10);
+            semanticRequest.setMinScore(request.getMinScore() != null ? request.getMinScore() : 0.01);
+            semanticRequest.setSearchType(SemanticSummarizationRequest.SearchType.VECTOR);
+            semanticRequest.setIncludeSourceReferences(true);
+            semanticRequest.setIncludeSearchResults(false); // Keep response clean
+            semanticRequest.setMaxSummaryLength(request.getMaxSummaryLength());
+            semanticRequest.setCustomPrompt(request.getCustomPrompt());
+            
+            SemanticSummarizationResponse response = semanticSummarizationService.searchAndSummarize(semanticRequest);
+            
+            if (response.isSuccess()) {
+                // Return a simplified response format
+                Map<String, Object> simplifiedResponse = new HashMap<>();
+                simplifiedResponse.put("success", true);
+                simplifiedResponse.put("query", request.getQuery());
+                simplifiedResponse.put("summary", response.getSummary());
+                simplifiedResponse.put("totalResults", response.getTotalResults());
+                simplifiedResponse.put("sourceReferences", response.getSourceReferences());
+                simplifiedResponse.put("processingTimeMs", response.getTotalProcessingTimeMs());
+                simplifiedResponse.put("model", response.getModel());
+                
+                logger.info("Successfully completed simple query summarization for '{}' in {}ms", 
+                           request.getQuery(), response.getTotalProcessingTimeMs());
+                return ResponseEntity.ok(simplifiedResponse);
+            } else {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("error", response.getError());
+                errorResponse.put("query", request.getQuery());
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Simple query summarization failed for: '{}'", request.getQuery(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("query", request.getQuery());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+    
+    /**
+     * Semantic search and summarization in one call - advanced version
+     * This performs the semantic search internally and then summarizes the results
+     */
+    @PostMapping("/semantic-summarize")
+    public ResponseEntity<SemanticSummarizationResponse> semanticSummarize(@Valid @RequestBody SemanticSummarizationRequest request) {
+        try {
+            logger.info("Received semantic summarization request for query: '{}' on index: '{}'", 
+                       request.getQuery(), request.getIndexName());
+            
+            SemanticSummarizationResponse response = semanticSummarizationService.searchAndSummarize(request);
+            
+            if (response.isSuccess()) {
+                logger.info("Successfully completed semantic summarization for query '{}' in {}ms (search: {}ms, summarization: {}ms)", 
+                           request.getQuery(), response.getTotalProcessingTimeMs(), 
+                           response.getSearchTimeMs(), response.getSummarizationTimeMs());
+                return ResponseEntity.ok(response);
+            } else {
+                logger.warn("Semantic summarization failed for query '{}': {}", 
+                           request.getQuery(), response.getError());
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Unexpected error during semantic summarization for query: '{}'", request.getQuery(), e);
+            
+            SemanticSummarizationResponse errorResponse = new SemanticSummarizationResponse(
+                request.getQuery(), request.getIndexName()
+            );
+            errorResponse.setSuccess(false);
+            errorResponse.setError("Error: " + e.getMessage());
+            errorResponse.setTotalProcessingTimeMs(0L);
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
 }

@@ -1,0 +1,221 @@
+### RAG Service Summarization Tests
+### Use with IntelliJ IDEA HTTP Client
+
+### 1. Health Check
+GET http://localhost:8080/actuator/health
+Accept: application/json
+
+###
+
+### 2. Create Test Index
+POST http://localhost:8080/api/indexes/summarization-test
+
+###
+
+### 3. Upload Sample CSV Data
+POST http://localhost:8080/api/rag/documents/csv
+Content-Type: application/json
+
+{
+  "csvContent": "title,content,category,author\n\"Machine Learning Guide\",\"Machine learning algorithms enable computers to learn patterns from data automatically. Common machine learning techniques include supervised learning with neural networks, unsupervised learning with clustering, and reinforcement learning. Machine learning is widely used in artificial intelligence applications.\",\"AI\",\"Dr. Alice Johnson\"\n\"Neural Networks Tutorial\",\"Neural networks are machine learning models inspired by the human brain. These artificial neural networks consist of layers of connected nodes that process information. Deep neural networks with many layers are called deep learning models and are powerful for complex pattern recognition tasks.\",\"AI\",\"Prof. Bob Smith\"\n\"Python Programming Basics\",\"Python programming language is popular for software development, data analysis, and machine learning. Python syntax is simple and readable, making Python programming accessible to beginners. Python libraries like NumPy and pandas make Python ideal for data science and programming tasks.\",\"Programming\",\"Sarah Wilson\"\n\"JavaScript Web Development\",\"JavaScript programming is essential for web development and creating interactive websites. JavaScript code runs in web browsers and enables dynamic user interfaces. Modern JavaScript frameworks and JavaScript libraries make web development more efficient and powerful for programming applications.\",\"Programming\",\"Mike Chen\"\n\"Artificial Intelligence Overview\",\"Artificial intelligence systems can perform tasks that typically require human intelligence. AI applications include machine learning, natural language processing, computer vision, and robotics. Modern artificial intelligence uses deep learning and neural networks to solve complex problems.\",\"AI\",\"Dr. Emily Davis\"\n\"Data Science Methods\",\"Data science combines programming, statistics, and domain expertise to extract insights from data. Data scientists use programming languages like Python and tools for machine learning to analyze large datasets. Data science applications span business intelligence, predictive analytics, and artificial intelligence.\",\"Data\",\"Alex Rodriguez\"\n\"Computer Programming Fundamentals\",\"Computer programming involves writing code to create software applications. Programming languages like Python, JavaScript, and Java are used for different programming tasks. Good programming practices include writing clean code, testing, and using programming frameworks to build efficient applications.\",\"Programming\",\"Maria Garcia\"\n\"Technology Innovation Trends\",\"Technology innovation drives advances in artificial intelligence, machine learning, and programming. Modern technology trends include cloud computing, mobile development, and data science. These technology innovations are transforming how we work and interact with digital systems.\",\"Technology\",\"John Smith\"",
+  "indexName": "summarization-test",
+  "contentColumnName": "content",
+  "source": "summarization-test"
+}
+
+###
+
+### 4. Basic Search - Machine Learning
+POST http://localhost:8080/api/rag/search
+Content-Type: application/json
+
+{
+  "query": "machine learning",
+  "indexName": "summarization-test",
+  "size": 5,
+  "minScore": 0.01
+}
+
+###
+
+### 5. Fallback Search - Programming (Lower threshold)
+POST http://localhost:8080/api/rag/search
+Content-Type: application/json
+
+{
+  "query": "programming",
+  "indexName": "summarization-test",
+  "size": 10,
+  "minScore": 0.001
+}
+
+###
+
+### 6. Search and Summarize - Machine Learning Neural Networks
+POST http://localhost:8080/api/rag/search-and-summarize
+Content-Type: application/json
+
+{
+  "query": "machine learning neural networks",
+  "indexName": "summarization-test",
+  "size": 5,
+  "minScore": 0.01
+}
+
+###
+
+### 7. Search for Custom Summarization - Programming Languages
+POST http://localhost:8080/api/rag/search
+Content-Type: application/json
+
+{
+  "query": "programming languages",
+  "indexName": "summarization-test",
+  "size": 3,
+  "minScore": 0.01
+}
+
+###
+
+### 8. Custom Summarization with Sample Data
+POST http://localhost:8080/api/rag/summarize
+Content-Type: application/json
+
+{
+  "query": "programming languages",
+  "searchResults": [
+    {
+      "score": 0.64,
+      "document": {
+        "id": "doc1",
+        "content": "Machine learning algorithms enable computers to learn patterns from data automatically. Common machine learning techniques include supervised learning with neural networks, unsupervised learning with clustering, and reinforcement learning. Machine learning is widely used in artificial intelligence applications.",
+        "metadata": {
+          "title": "Machine Learning Guide",
+          "category": "AI",
+          "author": "Dr. Alice Johnson"
+        },
+        "source": "summarization-test"
+      }
+    },
+    {
+      "score": 0.629,
+      "document": {
+        "id": "doc2",
+        "content": "Computer programming involves writing code to create software applications. Programming languages like Python, JavaScript, and Java are used for different programming tasks. Good programming practices include writing clean code, testing, and using programming frameworks to build efficient applications.",
+        "metadata": {
+          "title": "Computer Programming Fundamentals",
+          "category": "Programming",
+          "author": "Maria Garcia"
+        },
+        "source": "summarization-test"
+      }
+    },
+    {
+      "score": 0.624,
+      "document": {
+        "id": "doc3",
+        "content": "Python programming language is popular for software development, data analysis, and machine learning. Python syntax is simple and readable, making Python programming accessible to beginners. Python libraries like NumPy and pandas make Python ideal for data science and programming tasks.",
+        "metadata": {
+          "title": "Python Programming Basics",
+          "category": "Programming",
+          "author": "Sarah Wilson"
+        },
+        "source": "summarization-test"
+      }
+    }
+  ],
+  "maxSummaryLength": 150,
+  "includeSourceReferences": true,
+  "customPrompt": "Focus on practical applications and beginner-friendly aspects"
+}
+
+###
+
+### 9. Error Handling - Empty Search Results
+POST http://localhost:8080/api/rag/summarize
+Content-Type: application/json
+
+{
+  "query": "test query",
+  "searchResults": [],
+  "includeSourceReferences": true
+}
+
+###
+
+### 10. Input Validation - Invalid Request
+POST http://localhost:8080/api/rag/summarize
+Content-Type: application/json
+
+{
+  "query": ""
+}
+
+###
+
+### 11. Performance Test - Large Result Set
+POST http://localhost:8080/api/rag/search-and-summarize
+Content-Type: application/json
+
+{
+  "query": "comprehensive overview of technology and programming",
+  "indexName": "summarization-test",
+  "size": 8,
+  "minScore": 0.01
+}
+
+###
+
+### 12. Simple Search and Summarize - AI
+POST http://localhost:8080/api/rag/search-and-summarize
+Content-Type: application/json
+
+{
+  "query": "artificial intelligence",
+  "indexName": "summarization-test",
+  "size": 3,
+  "minScore": 0.05
+}
+
+###
+
+### 13. Simple Search and Summarize - Data Science
+POST http://localhost:8080/api/rag/search-and-summarize
+Content-Type: application/json
+
+{
+  "query": "data science",
+  "indexName": "summarization-test",
+  "size": 3,
+  "minScore": 0.05
+}
+
+###
+
+### 14. Basic Summarization with Minimal Config
+POST http://localhost:8080/api/rag/summarize
+Content-Type: application/json
+
+{
+  "query": "What is machine learning?",
+  "searchResults": [
+    {
+      "score": 0.85,
+      "document": {
+        "id": "sample-doc",
+        "content": "Machine learning is a method of data analysis that automates analytical model building. It is a branch of artificial intelligence based on the idea that systems can learn from data, identify patterns and make decisions with minimal human intervention.",
+        "metadata": {
+          "title": "Introduction to ML"
+        },
+        "source": "test-data"
+      }
+    }
+  ]
+}
+
+###
+
+### 15. Delete Test Index (Cleanup)
+DELETE http://localhost:8080/api/indexes/summarization-test
+
+###

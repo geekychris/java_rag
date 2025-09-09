@@ -545,6 +545,357 @@ EOF
     fi
 }
 
+# New simple query summarization test
+test_simple_query_summarization() {
+    local query="artificial intelligence and machine learning"
+    local request_data=$(cat << EOF
+{
+  "query": "$query",
+  "indexName": "$INDEX_NAME"
+}
+EOF
+)
+
+    log_info "Testing simple query summarization endpoint (easiest to use)..."
+    
+    local start_time=$(date +%s%N)
+    
+    local response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/summarize-query" \
+        -H "Content-Type: application/json" \
+        -d "$request_data")
+    
+    local end_time=$(date +%s%N)
+    local client_time=$(((end_time - start_time) / 1000000))
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" == "200" ]]; then
+        local success=$(echo "$response_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        local summary=$(echo "$response_body" | jq -r '.summary // ""' 2>/dev/null || echo "")
+        local processing_time=$(echo "$response_body" | jq -r '.processingTimeMs // 0' 2>/dev/null || echo "0")
+        local results_count=$(echo "$response_body" | jq -r '.totalResults // 0' 2>/dev/null || echo "0")
+        local model=$(echo "$response_body" | jq -r '.model // ""' 2>/dev/null || echo "")
+        local source_refs=$(echo "$response_body" | jq -r '.sourceReferences // []' 2>/dev/null || echo "[]")
+        
+        if [[ "$success" == "true" ]]; then
+            if [[ "$results_count" -gt 0 && -n "$summary" && "$summary" != "null" ]]; then
+                log_info "Simple query summarization successful:"
+                log_info "  - Results found: $results_count"
+                log_info "  - Processing time: ${processing_time}ms"
+                log_info "  - Client time: ${client_time}ms"
+                log_info "  - Model used: $model"
+                log_info "  - Summary length: ${#summary} characters"
+                log_info "  - Source references: $source_refs"
+                echo -e "${CYAN}Simple Query Summary:${NC}"
+                echo "$summary" | fold -w 80 -s | sed 's/^/    /'
+                echo
+                return 0
+            elif [[ "$results_count" -eq 0 ]]; then
+                log_info "Simple query summarization completed but found no matching documents"
+                log_info "  - This may be due to high minScore threshold or missing test data"
+                log_info "  - Processing completed successfully with 0 results"
+                return 0
+            else
+                log_error "Simple query summarization succeeded but has inconsistent state: results=$results_count, summary_present=${#summary}"
+                log_info "Response: $response_body"
+                return 1
+            fi
+        else
+            local error=$(echo "$response_body" | jq -r '.error // ""' 2>/dev/null || echo "")
+            log_error "Simple query summarization failed: success=$success, error=$error"
+            return 1
+        fi
+    else
+        log_error "Simple query summarization request failed. HTTP code: $http_code"
+        echo "Response: $response_body"
+        return 1
+    fi
+}
+
+# New semantic summarization tests
+test_semantic_summarize_vector() {
+    local query="machine learning algorithms and neural networks"
+    local request_data=$(cat << EOF
+{
+  "query": "$query",
+  "indexName": "$INDEX_NAME",
+  "maxResults": 5,
+  "minScore": 0.01,
+  "searchType": "VECTOR",
+  "includeSourceReferences": true,
+  "includeSearchResults": false
+}
+EOF
+)
+
+    log_info "Testing new semantic summarization endpoint with vector search..."
+    
+    local start_time=$(date +%s%N)
+    
+    local response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/semantic-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$request_data")
+    
+    local end_time=$(date +%s%N)
+    local client_time=$(((end_time - start_time) / 1000000))
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" == "200" ]]; then
+        local success=$(echo "$response_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        local summary=$(echo "$response_body" | jq -r '.summary // ""' 2>/dev/null || echo "")
+        local search_time=$(echo "$response_body" | jq -r '.searchTimeMs // 0' 2>/dev/null || echo "0")
+        local summarization_time=$(echo "$response_body" | jq -r '.summarizationTimeMs // 0' 2>/dev/null || echo "0")
+        local total_time=$(echo "$response_body" | jq -r '.totalProcessingTimeMs // 0' 2>/dev/null || echo "0")
+        local results_count=$(echo "$response_body" | jq -r '.totalResults // 0' 2>/dev/null || echo "0")
+        local search_type=$(echo "$response_body" | jq -r '.searchType // ""' 2>/dev/null || echo "")
+        local source_refs=$(echo "$response_body" | jq -r '.sourceReferences // []' 2>/dev/null || echo "[]")
+        
+        if [[ "$success" == "true" ]]; then
+            if [[ "$results_count" -gt 0 && -n "$summary" && "$summary" != "null" ]]; then
+                log_info "Semantic summarization (vector) successful:"
+                log_info "  - Search type: $search_type"
+                log_info "  - Results found: $results_count"
+                log_info "  - Search time: ${search_time}ms"
+                log_info "  - Summarization time: ${summarization_time}ms"
+                log_info "  - Total processing time: ${total_time}ms"
+                log_info "  - Client total time: ${client_time}ms"
+                log_info "  - Summary length: ${#summary} characters"
+                log_info "  - Source references: $source_refs"
+                echo -e "${CYAN}Semantic Summary (Vector Search):${NC}"
+                echo "$summary" | fold -w 80 -s | sed 's/^/    /'
+                echo
+                return 0
+            elif [[ "$results_count" -eq 0 ]]; then
+                log_info "Semantic summarization (vector) successful but found no matching documents"
+                log_info "  - This may be due to high minScore threshold or missing test data"
+                log_info "  - Search time: ${search_time}ms"
+                log_info "  - Processing completed successfully with 0 results"
+                return 0
+            else
+                log_error "Semantic summarization succeeded but has inconsistent state: results=$results_count, summary_present=${#summary}"
+                log_info "Response: $response_body"
+                return 1
+            fi
+        else
+            log_error "Semantic summarization failed: success=$success, summary_length=${#summary}, results=$results_count"
+            log_info "Response: $response_body"
+            return 1
+        fi
+    else
+        log_error "Semantic summarization request failed. HTTP code: $http_code"
+        echo "Response: $response_body"
+        return 1
+    fi
+}
+
+test_semantic_summarize_hybrid() {
+    local query="programming languages and development"
+    local request_data=$(cat << EOF
+{
+  "query": "$query",
+  "indexName": "$INDEX_NAME",
+  "maxResults": 4,
+  "minScore": 0.01,
+  "searchType": "HYBRID",
+  "maxSummaryLength": 200,
+  "includeSourceReferences": true,
+  "includeSearchResults": true,
+  "customPrompt": "Focus on practical benefits and beginner-friendly aspects"
+}
+EOF
+)
+
+    log_info "Testing semantic summarization with hybrid search and custom parameters..."
+    
+    local response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/semantic-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$request_data")
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" == "200" ]]; then
+        local success=$(echo "$response_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        local summary=$(echo "$response_body" | jq -r '.summary // ""' 2>/dev/null || echo "")
+        local search_type=$(echo "$response_body" | jq -r '.searchType // ""' 2>/dev/null || echo "")
+        local results_count=$(echo "$response_body" | jq -r '.totalResults // 0' 2>/dev/null || echo "0")
+        local search_results=$(echo "$response_body" | jq -r '.searchResults // null' 2>/dev/null || echo "null")
+        
+        if [[ "$success" == "true" && -n "$summary" && "$summary" != "null" && "$results_count" -gt 0 ]]; then
+            log_info "Semantic summarization (hybrid) successful:"
+            log_info "  - Search type: $search_type"
+            log_info "  - Results found: $results_count"
+            log_info "  - Summary length: ${#summary} characters"
+            log_info "  - Search results included: $(if [[ "$search_results" != "null" ]]; then echo "yes"; else echo "no"; fi)"
+            echo -e "${CYAN}Semantic Summary (Hybrid Search):${NC}"
+            echo "$summary" | fold -w 80 -s | sed 's/^/    /'
+            
+            if [[ "$search_results" != "null" ]]; then
+                echo -e "${CYAN}Included Search Results:${NC}"
+                echo "$response_body" | jq -r '.searchResults[0:2][] | "  - Score: \(.score | tonumber | . * 1000 | round / 1000)\n    Content: \(.document.content | .[0:100])...\n"' 2>/dev/null || {
+                    log_info "  Search results present but unable to display details"
+                }
+            fi
+            echo
+            return 0
+        else
+            log_error "Hybrid semantic summarization failed: success=$success, summary_length=${#summary}, results=$results_count"
+            return 1
+        fi
+    else
+        log_error "Hybrid semantic summarization request failed. HTTP code: $http_code"
+        echo "Response: $response_body"
+        return 1
+    fi
+}
+
+test_semantic_summarize_error_handling() {
+    log_info "Testing semantic summarization error handling..."
+    
+    # Test with non-existent index
+    local request_data=$(cat << EOF
+{
+  "query": "test query",
+  "indexName": "non-existent-index",
+  "maxResults": 5,
+  "searchType": "VECTOR"
+}
+EOF
+)
+    
+    local response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/semantic-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$request_data")
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" =~ ^(400|404|500)$ ]]; then
+        log_info "Error handling working correctly for non-existent index (HTTP $http_code)"
+        return 0
+    elif [[ "$http_code" == "200" ]]; then
+        # Check if it properly reports failure
+        local success=$(echo "$response_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        local error=$(echo "$response_body" | jq -r '.error // ""' 2>/dev/null || echo "")
+        
+        if [[ "$success" == "false" && -n "$error" ]]; then
+            log_info "Error handling working correctly - returned success=false with error: $error"
+            return 0
+        else
+            log_error "Expected error for non-existent index, but got success=true"
+            return 1
+        fi
+    else
+        log_error "Unexpected HTTP code for error handling test: $http_code"
+        return 1
+    fi
+}
+
+test_semantic_summarize_validation() {
+    log_info "Testing semantic summarization input validation..."
+    
+    # Test with invalid input
+    local invalid_request='{"query": "", "indexName": ""}'
+    
+    local response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/semantic-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$invalid_request")
+    
+    local http_code="${response: -3}"
+    
+    if [[ "$http_code" == "400" ]]; then
+        log_info "Input validation working correctly for semantic summarization"
+        return 0
+    else
+        log_error "Expected 400 for invalid semantic summarization input, got: $http_code"
+        return 1
+    fi
+}
+
+test_semantic_summarize_performance_comparison() {
+    local query="artificial intelligence and machine learning applications"
+    
+    log_info "Comparing performance: legacy vs semantic summarization..."
+    
+    # Test legacy search-and-summarize
+    local legacy_request=$(cat << EOF
+{
+  "query": "$query",
+  "indexName": "$INDEX_NAME",
+  "size": 5,
+  "minScore": 0.01
+}
+EOF
+)
+    
+    local legacy_start=$(date +%s%N)
+    local legacy_response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/search-and-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$legacy_request")
+    local legacy_end=$(date +%s%N)
+    local legacy_client_time=$(((legacy_end - legacy_start) / 1000000))
+    
+    # Test new semantic summarization
+    local semantic_request=$(cat << EOF
+{
+  "query": "$query",
+  "indexName": "$INDEX_NAME",
+  "maxResults": 5,
+  "minScore": 0.01,
+  "searchType": "VECTOR",
+  "includeSearchResults": false
+}
+EOF
+)
+    
+    local semantic_start=$(date +%s%N)
+    local semantic_response=$(curl -s -w "%{http_code}" -X POST "$RAG_SERVICE_URL/api/rag/semantic-summarize" \
+        -H "Content-Type: application/json" \
+        -d "$semantic_request")
+    local semantic_end=$(date +%s%N)
+    local semantic_client_time=$(((semantic_end - semantic_start) / 1000000))
+    
+    # Parse responses
+    local legacy_code="${legacy_response: -3}"
+    local legacy_body="${legacy_response%???}"
+    local semantic_code="${semantic_response: -3}"
+    local semantic_body="${semantic_response%???}"
+    
+    if [[ "$legacy_code" == "200" && "$semantic_code" == "200" ]]; then
+        local legacy_success=$(echo "$legacy_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        local semantic_success=$(echo "$semantic_body" | jq -r '.success // false' 2>/dev/null || echo "false")
+        
+        if [[ "$legacy_success" == "true" && "$semantic_success" == "true" ]]; then
+            local legacy_processing=$(echo "$legacy_body" | jq -r '.processingTimeMs // 0' 2>/dev/null || echo "0")
+            local semantic_total=$(echo "$semantic_body" | jq -r '.totalProcessingTimeMs // 0' 2>/dev/null || echo "0")
+            local semantic_search=$(echo "$semantic_body" | jq -r '.searchTimeMs // 0' 2>/dev/null || echo "0")
+            local semantic_summarization=$(echo "$semantic_body" | jq -r '.summarizationTimeMs // 0' 2>/dev/null || echo "0")
+            
+            log_info "Performance comparison results:"
+            log_info "  Legacy approach:"
+            log_info "    - Server processing: ${legacy_processing}ms"
+            log_info "    - Client total: ${legacy_client_time}ms"
+            log_info "  Semantic approach:"
+            log_info "    - Search time: ${semantic_search}ms"
+            log_info "    - Summarization time: ${semantic_summarization}ms"
+            log_info "    - Server total: ${semantic_total}ms"
+            log_info "    - Client total: ${semantic_client_time}ms"
+            
+            # Both should be successful for this test to pass
+            return 0
+        else
+            log_error "Performance comparison failed - one or both requests unsuccessful"
+            return 1
+        fi
+    else
+        log_error "Performance comparison failed - HTTP errors: legacy=$legacy_code, semantic=$semantic_code"
+        return 1
+    fi
+}
+
 # Main execution
 main() {
     echo -e "${BLUE}========================================${NC}"
@@ -578,6 +929,14 @@ main() {
     run_test "Input Validation" test_summarization_validation
     run_test "Performance Test" test_summarization_performance
     
+    # New semantic summarization tests
+    run_test "Simple Query Summarization" test_simple_query_summarization
+    run_test "Semantic Summarization (Vector)" test_semantic_summarize_vector
+    run_test "Semantic Summarization (Hybrid)" test_semantic_summarize_hybrid
+    run_test "Semantic Summarization Error Handling" test_semantic_summarize_error_handling
+    run_test "Semantic Summarization Validation" test_semantic_summarize_validation
+    run_test "Performance Comparison (Legacy vs Semantic)" test_semantic_summarize_performance_comparison
+    
     # Display results
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}           Test Results                 ${NC}"
@@ -598,8 +957,9 @@ main() {
         log_success "Summarization functionality is working correctly."
         echo
         log_info "You can now use the summarization endpoints:"
-        log_info "  - POST /api/rag/summarize"
-        log_info "  - POST /api/rag/search-and-summarize"
+        log_info "  - POST /api/rag/summarize (traditional with pre-provided results)"
+        log_info "  - POST /api/rag/search-and-summarize (legacy combined approach)"
+        log_info "  - POST /api/rag/semantic-summarize (NEW: improved search + summarization)"
         exit 0
     else
         echo

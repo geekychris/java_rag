@@ -15,6 +15,9 @@ public class SearchRequest {
     private int size = 10;
     
     private double minScore = 0.0;
+    
+    // Optional flag to include embeddings in the response (defaults to false for cleaner responses)
+    private boolean includeEmbeddings = false;
 
     public SearchRequest() {}
 
@@ -55,5 +58,13 @@ public class SearchRequest {
 
     public void setMinScore(double minScore) {
         this.minScore = minScore;
+    }
+    
+    public boolean isIncludeEmbeddings() {
+        return includeEmbeddings;
+    }
+    
+    public void setIncludeEmbeddings(boolean includeEmbeddings) {
+        this.includeEmbeddings = includeEmbeddings;
     }
 }

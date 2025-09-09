@@ -1,0 +1,198 @@
+# RAG Service Query-to-Summary Test Requests
+#
+# This test suite focuses on direct query-to-summary endpoints that handle
+# the complete workflow: query → search → summarize in one step.
+#
+# Usage: Open this file in an HTTP client (VS Code REST Client or IntelliJ HTTP client)
+# and issue requests individually from top to bottom.
+#
+# Variables
+#@baseUrl = {{RAG_SERVICE_URL}}
+@baseUrl = http://localhost:8080
+@indexName = summarization-test
+@minScore = 0.01
+
+###
+# Health Check
+GET {{baseUrl}}/actuator/health
+Accept: application/json
+
+###
+# Create Test Index
+POST {{baseUrl}}/api/indexes/{{indexName}}
+Accept: application/json
+
+###
+# Upload Sample CSV Data to the Index
+# If you get 200/201, wait ~10 seconds for indexing to complete before searching.
+POST {{baseUrl}}/api/rag/documents/csv
+Content-Type: application/json
+Accept: application/json
+
+{
+  "csvContent": "title,content,category,author\n\"Machine Learning Guide\",\"Machine learning algorithms enable computers to learn patterns from data automatically. Common machine learning techniques include supervised learning with neural networks, unsupervised learning with clustering, and reinforcement learning. Machine learning is widely used in artificial intelligence applications.\",\"AI\",\"Dr. Alice Johnson\"\n\"Neural Networks Tutorial\",\"Neural networks are machine learning models inspired by the human brain. These artificial neural networks consist of layers of connected nodes that process information. Deep neural networks with many layers are called deep learning models and are powerful for complex pattern recognition tasks.\",\"AI\",\"Prof. Bob Smith\"\n\"Python Programming Basics\",\"Python programming language is popular for software development, data analysis, and machine learning. Python syntax is simple and readable, making Python programming accessible to beginners. Python libraries like NumPy and pandas make Python ideal for data science and programming tasks.\",\"Programming\",\"Sarah Wilson\"\n\"JavaScript Web Development\",\"JavaScript programming is essential for web development and creating interactive websites. JavaScript code runs in web browsers and enables dynamic user interfaces. Modern JavaScript frameworks and JavaScript libraries make web development more efficient and powerful for programming applications.\",\"Programming\",\"Mike Chen\"\n\"Artificial Intelligence Overview\",\"Artificial intelligence systems can perform tasks that typically require human intelligence. AI applications include machine learning, natural language processing, computer vision, and robotics. Modern artificial intelligence uses deep learning and neural networks to solve complex problems.\",\"AI\",\"Dr. Emily Davis\"\n\"Data Science Methods\",\"Data science combines programming, statistics, and domain expertise to extract insights from data. Data scientists use programming languages like Python and tools for machine learning to analyze large datasets. Data science applications span business intelligence, predictive analytics, and artificial intelligence.\",\"Data\",\"Alex Rodriguez\"\n\"Computer Programming Fundamentals\",\"Computer programming involves writing code to create software applications. Programming languages like Python, JavaScript, and Java are used for different programming tasks. Good programming practices include writing clean code, testing, and using programming frameworks to build efficient applications.\",\"Programming\",\"Maria Garcia\"\n\"Technology Innovation Trends\",\"Technology innovation drives advances in artificial intelligence, machine learning, and programming. Modern technology trends include cloud computing, mobile development, and data science. These technology innovations are transforming how we work and interact with digital systems.\",\"Technology\",\"John Smith\"\n",
+  "indexName": "{{indexName}}",
+  "contentColumnName": "content",
+  "source": "summarization-test"
+}
+
+
+###
+# ==============================================================================
+# BASIC QUERY-TO-SUMMARY ENDPOINTS (Recommended for most use cases)
+# ==============================================================================
+
+###
+# 1. SIMPLE: Basic Query Summarization
+# Just provide query and index - everything else uses smart defaults
+POST {{baseUrl}}/api/rag/summarize-query
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "artificial intelligence and machine learning",
+  "indexName": "{{indexName}}"
+}
+
+###
+# 2. SIMPLE: Query Summarization with Custom Parameters
+POST {{baseUrl}}/api/rag/summarize-query
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "programming languages and development",
+  "indexName": "{{indexName}}",
+  "maxResults": 5,
+  "minScore": 0.02,
+  "maxSummaryLength": 150,
+  "customPrompt": "Focus on beginner-friendly aspects and practical examples"
+}
+
+###
+# 3. SIMPLE: Technology Innovation Summary
+POST {{baseUrl}}/api/rag/summarize-query
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "technology innovation and trends",
+  "indexName": "{{indexName}}",
+  "maxResults": 4,
+  "customPrompt": "Explain the key trends and their business impact"
+}
+
+###
+# 4. LEGACY: Search-and-Summarize (older approach)
+# Uses basic vector search + summarization
+POST {{baseUrl}}/api/rag/search-and-summarize
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "neural networks and deep learning",
+  "indexName": "{{indexName}}",
+  "size": 5,
+  "minScore": {{minScore}}
+}
+
+### ==============================================================================
+# ADVANCED SEMANTIC SUMMARIZATION (Full control over search and summarization)
+# ==============================================================================
+
+###
+# 5. ADVANCED: Vector Search Summarization
+# Full control over search parameters and response format
+POST {{baseUrl}}/api/rag/semantic-summarize
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "machine learning algorithms and applications",
+  "indexName": "{{indexName}}",
+  "maxResults": 5,
+  "minScore": {{minScore}},
+  "searchType": "VECTOR",
+  "includeSourceReferences": true,
+  "includeSearchResults": false
+}
+
+###
+# 6. ADVANCED: Hybrid Search Summarization
+# Combines vector similarity and text matching
+POST {{baseUrl}}/api/rag/semantic-summarize
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "programming languages and web development",
+  "indexName": "{{indexName}}",
+  "maxResults": 4,
+  "minScore": {{minScore}},
+  "searchType": "HYBRID",
+  "maxSummaryLength": 200,
+  "includeSourceReferences": true,
+  "includeSearchResults": true,
+  "customPrompt": "Focus on practical benefits for developers"
+}
+
+###
+# 7. OPTIONAL: Basic Search (to inspect documents without embeddings)
+POST {{baseUrl}}/api/rag/search
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "data science",
+  "indexName": "{{indexName}}",
+  "size": 3,
+  "minScore": {{minScore}},
+  "includeEmbeddings": false
+}
+
+### ==============================================================================
+# ERROR HANDLING AND VALIDATION TESTS
+# ==============================================================================
+
+###
+# 8. Error Handling: Non-existent Index
+# Should return error for missing index
+POST {{baseUrl}}/api/rag/semantic-summarize
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "test query",
+  "indexName": "non-existent-index",
+  "maxResults": 5,
+  "searchType": "VECTOR"
+}
+
+###
+# 9. Input Validation: Empty Query
+# Should return HTTP 400 for invalid input
+POST {{baseUrl}}/api/rag/semantic-summarize
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "",
+  "indexName": ""
+}
+
+###
+# 10. Error Handling: Simple Endpoint with Invalid Index
+POST {{baseUrl}}/api/rag/summarize-query
+Content-Type: application/json
+Accept: application/json
+
+{
+  "query": "test query",
+  "indexName": "invalid-index-name"
+}
+
+###
+# Cleanup: Delete Test Index
+DELETE {{baseUrl}}/api/indexes/{{indexName}}
+Accept: application/json
+

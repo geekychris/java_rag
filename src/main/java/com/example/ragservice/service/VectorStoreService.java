@@ -198,9 +198,16 @@ public class VectorStoreService {
     }
     
     /**
-     * Perform vector similarity search using native k-NN
+     * Perform vector similarity search using native k-NN (excludes embeddings by default)
      */
     public List<SearchResult> searchSimilar(String indexName, String query, int size, double minScore) throws IOException {
+        return searchSimilar(indexName, query, size, minScore, false);
+    }
+    
+    /**
+     * Perform vector similarity search using native k-NN with optional embedding inclusion
+     */
+    public List<SearchResult> searchSimilar(String indexName, String query, int size, double minScore, boolean includeEmbeddings) throws IOException {
         // Generate embedding for the query
         List<Double> queryEmbedding = embeddingService.generateEmbedding(query);
         
@@ -234,7 +241,7 @@ public class VectorStoreService {
         
         List<SearchResult> results = new ArrayList<>();
         for (SearchHit hit : searchResponse.getHits().getHits()) {
-            Document document = mapSourceToDocument(hit.getSourceAsMap());
+            Document document = mapSourceToDocument(hit.getSourceAsMap(), includeEmbeddings);
             SearchResult result = new SearchResult(document, hit.getScore());
             results.add(result);
         }
@@ -304,10 +311,18 @@ public class VectorStoreService {
     }
     
     /**
-     * Map OpenSearch source to Document object
+     * Map OpenSearch source to Document object (excludes embedding by default)
      */
     @SuppressWarnings("unchecked")
     private Document mapSourceToDocument(Map<String, Object> source) {
+        return mapSourceToDocument(source, false);
+    }
+    
+    /**
+     * Map OpenSearch source to Document object with optional embedding inclusion
+     */
+    @SuppressWarnings("unchecked")
+    private Document mapSourceToDocument(Map<String, Object> source, boolean includeEmbedding) {
         Document document = new Document();
         document.setId((String) source.get("id"));
         document.setContent((String) source.get("content"));
@@ -318,7 +333,8 @@ public class VectorStoreService {
             document.setTimestamp(java.time.Instant.parse(source.get("timestamp").toString()));
         }
         
-        if (source.get("embedding") != null) {
+        // Only include embedding if specifically requested (to keep responses clean)
+        if (includeEmbedding && source.get("embedding") != null) {
             List<Double> embedding = (List<Double>) source.get("embedding");
             document.setEmbedding(embedding);
         }
