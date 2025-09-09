@@ -217,6 +217,14 @@ EOF
         log_info "Search returned $results_count results for query: '$query'"
         
         if [[ "$results_count" -gt 0 ]]; then
+            # Display search results details
+            echo -e "${CYAN}Search Results:${NC}"
+            echo "$response_body" | jq -r '.results[] | "  - Score: \(.score | tonumber | . * 1000 | round / 1000)\n    Title: \(.document.metadata.title // "N/A")\n    Content: \(.document.content | .[0:150])...\n    Source: \(.document.source // "N/A")\n"' 2>/dev/null || {
+                echo "$response_body" | jq -r '.results[] | "  - Score: " + (.score | tostring) + "\n    Content: " + (.document.content | .[0:150]) + "...\n"' 2>/dev/null || {
+                    log_info "  Raw results: $(echo "$response_body" | jq -c '.results[0:3]' 2>/dev/null || echo 'Unable to parse results')"
+                }
+            }
+            echo
             return 0
         else
             log_error "Search returned no results for query: '$query'"
@@ -243,6 +251,12 @@ EOF
                 local fallback_count=$(echo "$fallback_body" | jq -r '.totalResults // 0' 2>/dev/null || echo "0")
                 log_info "Fallback search found $fallback_count results"
                 if [[ "$fallback_count" -gt 0 ]]; then
+                    # Display fallback search results
+                    echo -e "${CYAN}Fallback Search Results:${NC}"
+                    echo "$fallback_body" | jq -r '.results[0:3][] | "  - Score: \(.score | tonumber | . * 1000 | round / 1000)\n    Content: \(.document.content | .[0:100])...\n"' 2>/dev/null || {
+                        log_info "  Fallback results found but unable to display details"
+                    }
+                    echo
                     return 0
                 fi
             fi
@@ -357,11 +371,19 @@ EOF
         -d "$search_request")
     
     local search_results=$(echo "$search_response" | jq -r '.results // []' 2>/dev/null || echo "[]")
+    local results_count=$(echo "$search_response" | jq -r '.totalResults // 0' 2>/dev/null || echo "0")
     
-    if [[ "$search_results" == "[]" ]]; then
+    if [[ "$search_results" == "[]" || "$results_count" == "0" ]]; then
         log_error "No search results for custom summarization test"
         return 1
     fi
+    
+    log_info "Found $results_count results for custom summarization:"
+    echo -e "${CYAN}Search Results for Custom Summarization:${NC}"
+    echo "$search_response" | jq -r '.results[0:3][] | "  - Score: \(.score | tonumber | . * 1000 | round / 1000)\n    Title: \(.document.metadata.title // "N/A")\n    Content: \(.document.content | .[0:120])...\n"' 2>/dev/null || {
+        log_info "  Found results but unable to display details"
+    }
+    echo
     
     # Now test custom summarization
     local summarization_request=$(cat << EOF
