@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-rag-service
+  namespace: default
+  labels:
+    app: java-rag-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-rag-service
+  template:
+    metadata:
+      labels:
+        app: java-rag-service
+    spec:
+      containers:
+      - name: java-rag-service
+        image: java-rag-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "k8s"
+        - name: OPENSEARCH_HOST
+          value: "opensearch-service"
+        - name: OPENSEARCH_PORT
+          value: "9200"
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama-service:11434"
+        - name: JAVA_OPTS
+          value: "-Xmx1g -Xms512m"
+        - name: RAG_EMBEDDING_DIMENSION
+          value: "4096"
+        - name: RAG_MAX_SEARCH_RESULTS
+          value: "10"
+        resources:
+          requests:
+            memory: "768Mi"
+            cpu: "250m"
+          limits:
+            memory: "1536Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 12
+      restartPolicy: Always

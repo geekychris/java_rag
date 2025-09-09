@@ -1,6 +1,8 @@
 # RAG Service with Spring Boot AI and OpenSearch
 
-A production-ready Retrieval Augmented Generation (RAG) service built with Spring Boot, Spring AI, and OpenSearch. This service provides vector-based document storage, retrieval, and search capabilities with support for CSV document ingestion and local Llama model integration.
+A production-ready Retrieval Augmented Generation (RAG) service built with Spring Boot, Spring AI, and OpenSearch. This service provides enterprise-grade vector-based document storage, retrieval, and search capabilities with comprehensive support for CSV document ingestion, local Llama model integration, and a fully-featured Java client library.
+
+Designed for scalability and production deployment, the service supports local development, Docker containerization, and Kubernetes orchestration with complete observability and health monitoring.
 
 ## Architecture Overview
 
@@ -275,26 +277,85 @@ Content-Type: application/json
 }
 ```
 
+## Quick Start Guide
+
+### Option 1: Local Development (Traditional)
+
+```bash
+# 1. Start dependencies
+docker run -d --name opensearch-dev -p 30920:9200 -e "discovery.type=single-node" -e "plugins.security.disabled=true" opensearchproject/opensearch:2.11.1
+ollama pull llama2 && ollama serve
+
+# 2. Build and run the service
+mvn clean package
+java -jar target/rag-service-0.0.1-SNAPSHOT.jar
+```
+
+### Option 2: Docker (Containerized)
+
+```bash
+# 1. Start dependencies
+docker run -d --name opensearch-dev -p 30920:9200 -e "discovery.type=single-node" -e "plugins.security.disabled=true" opensearchproject/opensearch:2.11.1
+docker run -d --name ollama-dev -p 11434:11434 ollama/ollama:latest
+docker exec -it ollama-dev ollama pull llama2
+
+# 2. Build and run service
+./scripts/docker_build.sh
+./scripts/docker_run.sh
+```
+
+### Option 3: Kubernetes (Production-Ready)
+
+```bash
+# Deploy complete stack
+./scripts/k8s_deploy_all.sh
+
+# Access via port-forward
+kubectl port-forward service/java-rag-service 8080:80
+```
+
 ## Example Usage
 
-### 1. Create an Index
+### Basic API Testing
+
+#### 1. Health Check
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+#### 2. Create an Index
 ```bash
 curl -X POST http://localhost:8080/api/indexes/tech-docs
 ```
 
-### 2. Upload Sample CSV
+#### 3. Upload Single Document
+```bash
+curl -X POST http://localhost:8080/api/rag/documents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Spring Boot is a powerful framework for building Java applications with minimal configuration.",
+    "indexName": "tech-docs",
+    "source": "manual-test",
+    "metadata": {
+      "category": "Java Framework",
+      "difficulty": "beginner"
+    }
+  }'
+```
+
+#### 4. Upload CSV Documents
 ```bash
 curl -X POST http://localhost:8080/api/rag/documents/csv \
   -H "Content-Type: application/json" \
   -d '{
-    "csvContent": "'"$(cat examples/tech_articles.csv | sed 's/"/\\"/g' | tr '\n' '\\n')"'",
+    "csvContent": "title,content,category\n\"Sample Doc 1\",\"This is the first sample document for testing the RAG service.\",\"Technology\"\n\"Sample Doc 2\",\"This is the second sample document about artificial intelligence.\",\"AI\"",
     "indexName": "tech-docs",
     "contentColumnName": "content",
-    "source": "tech-articles"
+    "source": "curl-test"
   }'
 ```
 
-### 3. Search Documents
+#### 5. Search Documents
 ```bash
 curl -X POST http://localhost:8080/api/rag/search \
   -H "Content-Type: application/json" \
@@ -305,6 +366,40 @@ curl -X POST http://localhost:8080/api/rag/search \
     "minScore": 0.3
   }'
 ```
+
+#### 6. Hybrid Search (Vector + Text)
+```bash
+curl -X POST http://localhost:8080/api/rag/search/hybrid \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "artificial intelligence",
+    "indexName": "tech-docs",
+    "size": 10,
+    "minScore": 0.3
+  }'
+```
+
+### Working with Files
+
+#### Upload from JSON File
+```bash
+# Create request file
+cat > request.json << 'EOF'
+{
+  "csvContent": "title,content,category,author\n\"Introduction to Machine Learning\",\"Machine Learning is a subset of artificial intelligence that enables computers to learn and make decisions without being explicitly programmed.\",\"Technology\",\"Alice Johnson\"",
+  "indexName": "tech-docs",
+  "contentColumnName": "content",
+  "source": "sample-tech-articles"
+}
+EOF
+
+# Use it
+curl -X POST http://localhost:8080/api/rag/documents/csv \
+  -H "Content-Type: application/json" \
+  -d @request.json
+```
+
+For complete cURL examples and troubleshooting, see [CURL_EXAMPLES.md](CURL_EXAMPLES.md).
 
 ## Sample Data
 
@@ -382,12 +477,233 @@ logging:
     org.springframework.ai: DEBUG
 ```
 
+## Java Client Library
+
+The service includes a comprehensive Java client library for easy integration with your applications. The client provides type-safe operations for all service functionality.
+
+### Quick Start with Client Library
+
+```java
+// Create a client with default settings
+try (RagClient client = RagClientImpl.create("http://localhost:8080")) {
+    // Check if service is healthy
+    if (client.isHealthy()) {
+        System.out.println("RAG service is ready!");
+        
+        // Perform a simple search
+        SearchResponse results = client.search("machine learning", "my-index");
+        System.out.println("Found " + results.getTotalResults() + " results");
+        
+        // Print results
+        results.getResults().forEach(result -> {
+            System.out.println("Score: " + result.getScore());
+            System.out.println("Content: " + result.getDocument().getContent());
+        });
+    }
+}
+```
+
+### Client Configuration
+
+```java
+// Create client with custom configuration
+RagClientConfig config = RagClientConfig.builder()
+    .baseUrl("https://your-rag-service.com")
+    .connectTimeout(Duration.ofSeconds(30))
+    .readTimeout(Duration.ofSeconds(60))
+    .maxRetries(3)
+    .retryDelay(Duration.ofSeconds(1))
+    .build();
+
+try (RagClient client = new RagClientImpl(config)) {
+    // Your RAG operations here
+}
+```
+
+### Core Client Operations
+
+#### Document Upload
+```java
+// Upload CSV content
+String csvData = "title,content,author\n" +
+                 "AI Overview,Introduction to artificial intelligence,John Doe";
+
+CsvUploadRequest csvRequest = CsvUploadRequest.builder()
+    .csvContent(csvData)
+    .indexName("articles")
+    .contentColumnName("content")
+    .source("my-application")
+    .build();
+
+CsvUploadResponse csvResponse = client.uploadCsv(csvRequest);
+System.out.println("Indexed " + csvResponse.getDocumentsIndexed() + " documents");
+```
+
+#### Search Operations
+```java
+// Simple search
+SearchResponse response = client.search("artificial intelligence", "tech-articles");
+
+// Advanced search with parameters
+SearchResponse response = client.search("AI ethics", "tech-articles", 10, 0.5);
+
+// Search with request object
+SearchRequest request = SearchRequest.builder()
+    .query("neural networks")
+    .indexName("research-papers")
+    .maxResults(5)
+    .minScore(0.3)
+    .vectorSearch() // or .hybridSearch()
+    .build();
+SearchResponse response = client.search(request);
+```
+
+### Client Library Features
+
+- **Type Safety**: Full type safety with proper DTOs and error handling
+- **Auto-Closeable**: Implements AutoCloseable for proper resource management
+- **Configurable**: Flexible timeout, retry, and connection settings
+- **Thread Safe**: Can be shared across multiple threads
+- **Comprehensive Testing**: Extensive unit and integration tests
+
+For complete client library documentation, see [README-RAG-CLIENT.md](README-RAG-CLIENT.md).
+
+## Docker Deployment
+
+The service includes complete Docker support with multi-stage builds and production-ready configurations.
+
+### Build and Run with Docker
+
+```bash
+# Build the Docker image
+./scripts/docker_build.sh
+
+# Run the container (expects external dependencies)
+./scripts/docker_run.sh
+```
+
+### Docker Configuration
+
+The `Dockerfile` uses a multi-stage build:
+- **Build Stage**: Uses Maven with Amazon Corretto 21 to compile the application
+- **Runtime Stage**: Uses lightweight Amazon Corretto 21 Alpine image
+- **Security**: Runs as non-root user with proper permissions
+- **Health Checks**: Built-in health check endpoint monitoring
+
+### Docker Environment Variables
+
+```bash
+# Override default settings
+HOST_PORT_APP=8080 ./scripts/docker_run.sh
+OPENSEARCH_HOST=my-opensearch.com ./scripts/docker_run.sh
+OLLAMA_BASE_URL=http://my-ollama:11434 ./scripts/docker_run.sh
+```
+
+### Running Dependencies with Docker
+
+```bash
+# Start OpenSearch
+docker run -d --name opensearch-dev \
+  -p 30920:9200 \
+  -e "discovery.type=single-node" \
+  -e "plugins.security.disabled=true" \
+  opensearchproject/opensearch:2.11.1
+
+# Start Ollama
+docker run -d --name ollama-dev \
+  -p 11434:11434 \
+  ollama/ollama:latest
+  
+# Pull model
+docker exec -it ollama-dev ollama pull llama2
+```
+
+## Kubernetes Deployment
+
+The service includes production-ready Kubernetes manifests with complete observability, health checks, and resource management.
+
+### Quick Kubernetes Deployment
+
+```bash
+# Deploy complete stack (OpenSearch + Ollama + App)
+./scripts/k8s_deploy_all.sh
+
+# Or deploy just the app (if you have external dependencies)
+./scripts/k8s_deploy_app.sh
+
+# Clean up
+./scripts/k8s_delete_all.sh
+```
+
+### Kubernetes Architecture
+
+The Kubernetes setup includes:
+
+#### Application Resources
+- **Deployment**: 2 replicas with rolling updates
+- **Service**: LoadBalancer with ports 80 and 8080
+- **Health Checks**: Liveness, readiness, and startup probes
+- **Resource Limits**: CPU and memory constraints
+
+#### Optional Dependencies
+- **OpenSearch**: Single-node cluster with persistent storage
+- **Ollama**: GPU-ready deployment with model initialization
+- **Services**: ClusterIP services for internal communication
+
+### Kubernetes Configuration
+
+```yaml
+# App deployment with environment variables
+env:
+- name: SPRING_PROFILES_ACTIVE
+  value: "k8s"
+- name: OPENSEARCH_HOST
+  value: "opensearch-service"
+- name: OLLAMA_BASE_URL
+  value: "http://ollama-service:11434"
+- name: JAVA_OPTS
+  value: "-Xmx1g -Xms512m"
+```
+
+### Resource Requirements
+
+| Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
+|-----------|------------|-----------|-----------------|---------------|
+| Java RAG Service | 250m | 1000m | 768Mi | 1536Mi |
+| OpenSearch | 500m | 1000m | 1.5Gi | 2Gi |
+| Ollama | 500m | 2000m | 2Gi | 4Gi |
+
+### Accessing the Service
+
+```bash
+# Check service status
+kubectl get pods
+kubectl get services
+
+# Port forward for local access
+kubectl port-forward service/java-rag-service 8080:80
+
+# Check logs
+kubectl logs -l app=java-rag-service -f
+```
+
+### Health Monitoring
+
+Kubernetes deployment includes comprehensive health monitoring:
+
+- **Startup Probes**: Wait for application to start (up to 2 minutes)
+- **Readiness Probes**: Check if ready to receive traffic
+- **Liveness Probes**: Restart unhealthy pods
+- **Actuator Endpoints**: Spring Boot health and metrics
+
 ## Performance Considerations
 
 1. **Embedding Batch Size**: Process documents in batches for better performance
 2. **OpenSearch Tuning**: Configure appropriate heap size and JVM settings
 3. **Connection Pooling**: Adjust OpenSearch client connection settings
 4. **Caching**: Consider adding caching for frequently accessed documents
+5. **Resource Scaling**: Use Kubernetes HPA for automatic scaling
+6. **Load Balancing**: Multiple service replicas for high availability
 
 ## Security Considerations
 

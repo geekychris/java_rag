@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: default
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: ollama-data
+        emptyDir:
+          sizeLimit: "10Gi"
+      restartPolicy: Always
+---
+# Init job to pull the llama2 model after deployment
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-model-init
+  namespace: default
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: wait-for-ollama
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Ollama service to be ready..."
+          until curl -f http://ollama-service:11434/api/tags; do
+            echo "Waiting for Ollama..."
+            sleep 10
+          done
+          echo "Ollama is ready!"
+      containers:
+      - name: model-puller
+        image: ollama/ollama:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Pulling llama2 model..."
+          OLLAMA_HOST=ollama-service:11434 ollama pull llama2
+          echo "Model pull complete!"
+        env:
+        - name: OLLAMA_HOST
+          value: "ollama-service:11434"
+      restartPolicy: Never
+  backoffLimit: 3
