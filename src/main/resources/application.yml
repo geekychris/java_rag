@@ -31,6 +31,57 @@ rag:
     temperature: 0.3
     system-prompt: "You are an AI assistant that provides concise, accurate summaries based on search results and user queries."
 
+document:
+  processing:
+    # Directory scanning configuration
+    directory-scan:
+      max-files-per-scan: 10000
+      default-output-directory: "/tmp/document-scans"
+      async-processing: true
+      cleanup-completed-scans-after-hours: 24
+    
+    # CSV streaming configuration
+    csv:
+      batch-size: 100
+      max-record-size: 1048576  # 1MB
+      max-concurrent-streams: 5
+      stream-timeout-minutes: 60
+      cleanup-completed-streams-after-hours: 12
+    
+    # Document extraction configuration
+    extraction:
+      max-file-size: 104857600  # 100MB
+      timeout-seconds: 300
+      supported-extensions:
+        - pdf
+        - txt
+        - docx
+        - doc
+        - rtf
+        - html
+        - htm
+        - xml
+        - odt
+        - ods
+        - odp
+        - pptx
+        - ppt
+        - xlsx
+        - xls
+        - csv
+      
+      # Apache Tika configuration
+      tika:
+        max-string-length: -1  # No limit
+        detect-language: false
+        extract-metadata: true
+      
+      # PDF-specific settings
+      pdf:
+        extract-images: false
+        extract-annotations: true
+        max-pages: -1  # No limit
+
 logging:
   level:
     com.example.ragservice: DEBUG

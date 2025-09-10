@@ -63,6 +63,17 @@ Designed for scalability and production deployment, the service supports local d
 - 📈 **Scalable**: Built on Spring Boot with production-ready patterns
 - 🧪 **Well Tested**: Comprehensive unit and integration tests
 
+### 🆕 Document Processing Features
+
+- 📁 **Directory Scanning**: Recursive directory scanning with document text extraction
+- 📑 **Multi-Format Support**: Extract text from PDF, DOCX, TXT, RTF, HTML, XML, and 10+ more formats
+- 📊 **CSV Streaming**: Memory-efficient processing of large CSV files with batch indexing
+- ⚡ **Asynchronous Processing**: Non-blocking operations with real-time progress tracking
+- 📈 **Progress Monitoring**: Real-time status updates with processing rates and progress percentages
+- 🛑 **Cancellation Support**: Cancel long-running operations gracefully
+- 🔧 **Configurable Processing**: Customizable batch sizes, file limits, and processing parameters
+- 📋 **Comprehensive Metadata**: Rich metadata extraction including file properties and content statistics
+
 ## Prerequisites
 
 Before running the service, ensure you have the following installed:
@@ -316,6 +327,172 @@ Content-Type: application/json
 }
 ```
 
+### Document Processing Operations
+
+#### Directory Scanning
+
+Scan directories recursively and extract text from supported document formats.
+
+**Start Directory Scan:**
+```bash
+POST /api/v1/document-processing/directory-scan
+Content-Type: application/json
+
+{
+  "directory_path": "/path/to/documents",
+  "output_csv_path": "/path/to/output.csv",
+  "supported_extensions": ["pdf", "docx", "txt"],
+  "recursive": true,
+  "max_files": 1000
+}
+```
+
+**Get Scan Status:**
+```bash
+GET /api/v1/document-processing/directory-scan/{scanId}
+```
+
+**Response:**
+```json
+{
+  "scan_id": "scan_1694123456789_abcd1234",
+  "status": "COMPLETED",
+  "files_processed": 150,
+  "files_failed": 2,
+  "total_files_found": 152,
+  "csv_output_path": "/path/to/output.csv",
+  "start_time": "2024-09-08T10:30:00Z",
+  "end_time": "2024-09-08T10:35:42Z",
+  "duration_ms": 342000,
+  "processed_extensions": ["pdf", "docx", "txt"],
+  "errors": []
+}
+```
+
+**Cancel Directory Scan:**
+```bash
+DELETE /api/v1/document-processing/directory-scan/{scanId}
+```
+
+**List Active Scans:**
+```bash
+GET /api/v1/document-processing/directory-scan
+```
+
+#### CSV Streaming
+
+Stream and index large CSV files efficiently with batch processing.
+
+**Start CSV Streaming:**
+```bash
+POST /api/v1/document-processing/csv-streaming
+Content-Type: application/json
+
+{
+  "csv_file_path": "/path/to/large-file.csv",
+  "batch_size": 200,
+  "text_column": "content",
+  "metadata_columns": ["title", "category", "author"],
+  "skip_header": true,
+  "delimiter": ",",
+  "index_name": "documents"
+}
+```
+
+**Get Stream Status:**
+```bash
+GET /api/v1/document-processing/csv-streaming/{streamId}
+```
+
+**Response:**
+```json
+{
+  "stream_id": "stream_1694123456789_xyz9876",
+  "status": "PROCESSING",
+  "records_processed": 15420,
+  "records_indexed": 14647,
+  "records_failed": 773,
+  "total_records": 50000,
+  "batch_count": 77,
+  "current_batch": 78,
+  "progress_percentage": 30.84,
+  "start_time": "2024-09-08T11:00:00Z",
+  "duration_ms": 185000,
+  "processing_rate_per_second": 83.35,
+  "index_name": "documents",
+  "errors": [],
+  "warnings": []
+}
+```
+
+**Cancel CSV Streaming:**
+```bash
+DELETE /api/v1/document-processing/csv-streaming/{streamId}
+```
+
+**List Active Streams:**
+```bash
+GET /api/v1/document-processing/csv-streaming
+```
+
+#### Utility Operations
+
+**Get Supported Document Formats:**
+```bash
+GET /api/v1/document-processing/supported-formats
+```
+
+**Response:**
+```json
+{
+  "supported_extensions": [
+    "pdf", "txt", "docx", "doc", "rtf", "html", "htm", "xml",
+    "odt", "ods", "odp", "pptx", "ppt", "xlsx", "xls", "csv"
+  ],
+  "total_count": 16,
+  "description": "Supported document formats for text extraction"
+}
+```
+
+**Estimate CSV Record Count:**
+```bash
+POST /api/v1/document-processing/csv-estimate
+Content-Type: application/json
+
+{
+  "csv_file_path": "/path/to/file.csv",
+  "skip_header": true
+}
+```
+
+**Response:**
+```json
+{
+  "csv_file_path": "/path/to/file.csv",
+  "estimated_record_count": 45239,
+  "skip_header": true,
+  "status": "success"
+}
+```
+
+**Health Check:**
+```bash
+GET /api/v1/document-processing/health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "services": {
+    "directory_scan": "available",
+    "csv_streaming": "available",
+    "document_extraction": "available"
+  },
+  "timestamp": 1694123456789
+}
+```
+
 ## Quick Start Guide
 
 ### Option 1: Local Development (Traditional)
@@ -462,6 +639,124 @@ EOF
 curl -X POST http://localhost:8080/api/rag/documents/csv \
   -H "Content-Type: application/json" \
   -d @request.json
+```
+
+### Document Processing Examples
+
+#### Directory Scanning Example
+```bash
+# 1. Test document processing health
+curl http://localhost:8080/api/v1/document-processing/health
+
+# 2. Get supported formats
+curl http://localhost:8080/api/v1/document-processing/supported-formats
+
+# 3. Start a directory scan
+curl -X POST http://localhost:8080/api/v1/document-processing/directory-scan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "directory_path": "/Users/chris/Documents",
+    "output_csv_path": "/tmp/extracted_documents.csv",
+    "recursive": true,
+    "max_files": 50,
+    "supported_extensions": ["pdf", "txt", "docx"]
+  }'
+
+# Response: {"scan_id": "scan_1694123456789_abcd1234", "status": "STARTED", ...}
+
+# 4. Check scan progress
+curl http://localhost:8080/api/v1/document-processing/directory-scan/scan_1694123456789_abcd1234
+
+# 5. List all active scans
+curl http://localhost:8080/api/v1/document-processing/directory-scan
+```
+
+#### CSV Streaming Example
+```bash
+# 1. Estimate record count first
+curl -X POST http://localhost:8080/api/v1/document-processing/csv-estimate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csv_file_path": "/path/to/large-dataset.csv",
+    "skip_header": true
+  }'
+
+# 2. Start CSV streaming
+curl -X POST http://localhost:8080/api/v1/document-processing/csv-streaming \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csv_file_path": "/path/to/large-dataset.csv",
+    "batch_size": 100,
+    "text_column": "content",
+    "metadata_columns": ["title", "category", "author"],
+    "skip_header": true,
+    "index_name": "documents"
+  }'
+
+# Response: {"stream_id": "stream_1694123456789_xyz9876", "status": "STARTED", ...}
+
+# 3. Monitor streaming progress
+curl http://localhost:8080/api/v1/document-processing/csv-streaming/stream_1694123456789_xyz9876
+
+# 4. Cancel if needed
+curl -X DELETE http://localhost:8080/api/v1/document-processing/csv-streaming/stream_1694123456789_xyz9876
+```
+
+#### Complete Workflow Example
+```bash
+# Complete workflow: Extract documents, then stream to index
+
+# Step 1: Scan directory and extract to CSV
+SCAN_RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/document-processing/directory-scan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "directory_path": "/Users/chris/research-papers",
+    "output_csv_path": "/tmp/research_papers.csv",
+    "recursive": true,
+    "supported_extensions": ["pdf", "docx", "txt"]
+  }')
+
+SCAN_ID=$(echo $SCAN_RESPONSE | jq -r '.scan_id')
+echo "Started directory scan: $SCAN_ID"
+
+# Step 2: Wait for completion (poll status)
+while true; do
+  STATUS=$(curl -s "http://localhost:8080/api/v1/document-processing/directory-scan/$SCAN_ID" | jq -r '.status')
+  echo "Scan status: $STATUS"
+  if [ "$STATUS" = "COMPLETED" ]; then
+    break
+  fi
+  sleep 5
+done
+
+# Step 3: Stream the CSV to search index
+STREAM_RESPONSE=$(curl -s -X POST http://localhost:8080/api/v1/document-processing/csv-streaming \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csv_file_path": "/tmp/research_papers.csv",
+    "batch_size": 50,
+    "text_column": "text",
+    "metadata_columns": ["file_name", "file_path", "content_type"],
+    "skip_header": true,
+    "index_name": "research-papers"
+  }')
+
+STREAM_ID=$(echo $STREAM_RESPONSE | jq -r '.stream_id')
+echo "Started CSV streaming: $STREAM_ID"
+
+# Step 4: Monitor streaming progress
+while true; do
+  PROGRESS=$(curl -s "http://localhost:8080/api/v1/document-processing/csv-streaming/$STREAM_ID")
+  STATUS=$(echo $PROGRESS | jq -r '.status')
+  PERCENTAGE=$(echo $PROGRESS | jq -r '.progress_percentage')
+  echo "Streaming status: $STATUS, Progress: $PERCENTAGE%"
+  if [ "$STATUS" = "COMPLETED" ]; then
+    break
+  fi
+  sleep 10
+done
+
+echo "Document processing complete! Ready to search."
 ```
 
 For complete cURL examples and troubleshooting, see [CURL_EXAMPLES.md](CURL_EXAMPLES.md).
