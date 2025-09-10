@@ -25,6 +25,32 @@ public class IndexController {
     }
     
     /**
+     * Get all available indexes
+     */
+    @GetMapping
+    public ResponseEntity<?> listIndexes() {
+        try {
+            java.util.List<String> indexes = vectorStoreService.listIndexes();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("indexes", indexes);
+            response.put("count", indexes.size());
+            
+            logger.debug("Listed {} indexes", indexes.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to list indexes", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
      * Create a new index
      */
     @PostMapping("/{indexName}")

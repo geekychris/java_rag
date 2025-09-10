@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Database, Settings, Sparkles, List, Brain, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, Database, Settings, Sparkles, List, Brain, AlertCircle, CheckCircle2, FolderPlus } from 'lucide-react';
 import SearchResults from './SearchResults';
 import Summarization from './Summarization';
+import AdminPanel from './AdminPanel';
+import IndexManager from './IndexManager';
 import ragApi from '../services/ragApi';
 
 const RagInterface = () => {
   // State management
   const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState('summarization-test');
+  const [selectedIndex, setSelectedIndex] = useState('my-docs');
   const [mode, setMode] = useState('summarize'); // 'search' or 'summarize'
   const [searchType, setSearchType] = useState('vector'); // 'vector' or 'hybrid'
   const [maxResults, setMaxResults] = useState(10);
@@ -15,6 +17,7 @@ const RagInterface = () => {
   const [customPrompt, setCustomPrompt] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showVectors, setShowVectors] = useState(false);
+  const [showIndexManager, setShowIndexManager] = useState(false);
   
   // Results state
   const [searchResults, setSearchResults] = useState(null);
@@ -25,6 +28,7 @@ const RagInterface = () => {
   // App state
   const [availableIndexes, setAvailableIndexes] = useState([]);
   const [serviceStatus, setServiceStatus] = useState('unknown');
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Load available indexes and check service health on component mount
   useEffect(() => {
@@ -50,10 +54,16 @@ const RagInterface = () => {
   const loadIndexes = async () => {
     try {
       const indexes = await ragApi.getIndexes();
-      setAvailableIndexes(Array.isArray(indexes) ? indexes : ['summarization-test', 'documents', 'knowledge-base']);
+      const indexList = Array.isArray(indexes) ? indexes : ['my-docs', 'documents', 'knowledge-base'];
+      setAvailableIndexes(indexList);
+      
+      // Update selected index if it doesn't exist in the list
+      if (!indexList.includes(selectedIndex)) {
+        setSelectedIndex(indexList[0] || 'my-docs');
+      }
     } catch (error) {
       console.error('Failed to load indexes:', error);
-      setAvailableIndexes(['summarization-test', 'documents', 'knowledge-base']);
+      setAvailableIndexes(['my-docs', 'documents', 'knowledge-base']);
     }
   };
 
@@ -119,6 +129,13 @@ const RagInterface = () => {
     setError(null);
   };
 
+  const handleIndexCreated = (newIndexName) => {
+    // Refresh the index list
+    loadIndexes();
+    // Optionally select the newly created index
+    setSelectedIndex(newIndexName);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -146,6 +163,7 @@ const RagInterface = () => {
             ) : null}
           </div>
         </div>
+
 
         {/* Main Form */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
@@ -207,13 +225,23 @@ const RagInterface = () => {
                   <Settings className="inline h-4 w-4 mr-1" />
                   Options
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
-                >
-                  {showAdvanced ? 'Hide' : 'Show'} Advanced Settings
-                </button>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    {showAdvanced ? 'Hide' : 'Show'} Advanced Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowIndexManager(!showIndexManager)}
+                    className="px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    <span>Manage</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -346,6 +374,16 @@ const RagInterface = () => {
           </form>
         </div>
 
+        {/* Index Manager */}
+        {showIndexManager && (
+          <div className="mb-8">
+            <IndexManager 
+              onIndexCreated={handleIndexCreated}
+              availableIndexes={availableIndexes}
+            />
+          </div>
+        )}
+
         {/* Results */}
         {mode === 'search' && (
           <SearchResults 
@@ -364,6 +402,12 @@ const RagInterface = () => {
             error={error} 
           />
         )}
+
+        {/* Admin Panel */}
+        <AdminPanel 
+          isVisible={showAdminPanel} 
+          onToggle={() => setShowAdminPanel(!showAdminPanel)} 
+        />
       </div>
     </div>
   );

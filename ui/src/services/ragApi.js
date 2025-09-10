@@ -41,16 +41,50 @@ export const ragApi = {
     return response.data;
   },
 
-  // Get available indexes (this endpoint might need to be implemented on the backend)
+  // Get available indexes
   getIndexes: async () => {
     try {
       const response = await api.get('/api/indexes');
-      return response.data;
+      return response.data.indexes || response.data;
     } catch (error) {
       // Fallback: return common index names if endpoint doesn't exist
       console.warn('Indexes endpoint not available, using fallback');
       return ['summarization-test', 'documents', 'knowledge-base'];
     }
+  },
+
+  // Create a new index
+  createIndex: async (indexName) => {
+    const response = await api.post(`/api/indexes/${indexName}`);
+    return response.data;
+  },
+
+  // Delete an index
+  deleteIndex: async (indexName) => {
+    const response = await api.delete(`/api/indexes/${indexName}`);
+    return response.data;
+  },
+
+  // Check if an index exists
+  indexExists: async (indexName) => {
+    const response = await api.get(`/api/indexes/${indexName}/exists`);
+    return response.data;
+  },
+
+  // Upload CSV data to an index
+  uploadCsv: async (indexName, csvContent, options = {}) => {
+    const {
+      contentColumnName = 'content',
+      source = 'csv-upload',
+    } = options;
+
+    const response = await api.post('/api/rag/documents/csv', {
+      indexName,
+      csvContent,
+      contentColumnName,
+      source,
+    });
+    return response.data;
   },
 
   // Search documents

@@ -120,6 +120,35 @@ public class VectorStoreService {
     }
     
     /**
+     * List all available indexes
+     */
+    public List<String> listIndexes() throws IOException {
+        try {
+            // Use GetIndexRequest with wildcard to get all indexes
+            GetIndexRequest request = new GetIndexRequest("*");
+            
+            // Get the index names directly
+            String[] indexNames = client.indices().get(request, RequestOptions.DEFAULT).getIndices();
+            
+            List<String> indexes = new ArrayList<>();
+            for (String indexName : indexNames) {
+                // Filter out system indexes (those starting with .)
+                if (!indexName.startsWith(".")) {
+                    indexes.add(indexName);
+                }
+            }
+            
+            logger.debug("Found {} indexes", indexes.size());
+            return indexes;
+            
+        } catch (Exception e) {
+            logger.error("Failed to list indexes", e);
+            // Fallback: return a default list based on common index names
+            return List.of("summarization-test", "documents", "knowledge-base");
+        }
+    }
+    
+    /**
      * Delete an index
      */
     public void deleteIndex(String indexName) throws IOException {
