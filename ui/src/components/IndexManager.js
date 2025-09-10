@@ -37,7 +37,7 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
     setSuccess(null);
 
     try {
-      const result = await ragApi.createIndex(newIndexName);
+      await ragApi.createIndex(newIndexName);
       setSuccess(`Index "${newIndexName}" created successfully!`);
       setNewIndexName('');
       setShowCreateIndex(false);
