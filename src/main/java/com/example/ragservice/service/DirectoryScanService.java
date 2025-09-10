@@ -242,7 +242,7 @@ public class DirectoryScanService {
         
         try (FileWriter fileWriter = new FileWriter(outputCsvPath);
              CSVPrinter csvPrinter = new CSVPrinter(fileWriter, CSVFormat.DEFAULT
-                 .withHeader("file_name", "file_path", "file_size", "content_type", "text", "metadata"))) {
+                 .withHeader("path", "file_name", "file_path", "file_size", "content_type", "text", "metadata"))) {
             
             AtomicInteger processed = new AtomicInteger(0);
             AtomicInteger failed = new AtomicInteger(0);
@@ -269,6 +269,7 @@ public class DirectoryScanService {
                     String metadataJson = convertMetadataToJson(metadata);
                     
                     csvPrinter.printRecord(
+                        filePath.toString(),
                         metadata.get("file_name"),
                         metadata.get("file_path"),
                         metadata.get("file_size"),

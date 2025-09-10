@@ -6,10 +6,14 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +24,9 @@ import java.util.UUID;
 public class CsvProcessingService {
     
     private static final Logger logger = LoggerFactory.getLogger(CsvProcessingService.class);
+    
+    @Autowired
+    private VectorStoreService vectorStoreService;
     
     /**
      * Parse CSV content and convert to Document objects
@@ -131,6 +138,171 @@ public class CsvProcessingService {
         }
         
         return documents;
+    }
+    
+    /**
+     * Ingest CSV file in streaming fashion for large files
+     * @param csvFilePath Path to the CSV file
+     * @param indexName Target index name
+     * @param contentColumnName Column containing the main content
+     * @param docIdColumnName Column containing document IDs (optional)
+     * @param source Source identifier
+     * @param batchSize Number of documents to process in each batch
+     * @param maxRecords Maximum number of records to process (optional)
+     * @return Number of documents successfully ingested
+     */
+    public int ingestCsvFile(String csvFilePath, String indexName, String contentColumnName, 
+                            String docIdColumnName, String source, Integer batchSize, Integer maxRecords) 
+                            throws IOException {
+        Path csvFile = Paths.get(csvFilePath);
+        if (!Files.exists(csvFile)) {
+            throw new IllegalArgumentException("CSV file not found: " + csvFilePath);
+        }
+        
+        if (!Files.isReadable(csvFile)) {
+            throw new IllegalArgumentException("CSV file is not readable: " + csvFilePath);
+        }
+        
+        int totalIngested = 0;
+        int currentBatch = 0;
+        List<Document> batch = new ArrayList<>();
+        
+        // Use default batch size if not specified
+        int effectiveBatchSize = (batchSize != null && batchSize > 0) ? batchSize : 100;
+        
+        logger.info("Starting streaming CSV ingestion: file={}, index={}, batchSize={}, maxRecords={}", 
+                   csvFilePath, indexName, effectiveBatchSize, maxRecords);
+        
+        try (CSVParser csvParser = CSVFormat.DEFAULT
+                .withFirstRecordAsHeader()
+                .withIgnoreHeaderCase()
+                .withTrim()
+                .parse(Files.newBufferedReader(csvFile))) {
+            
+            logger.info("CSV headers: {}", csvParser.getHeaderNames());
+            
+            // Validate that the content column exists
+            if (!csvParser.getHeaderNames().contains(contentColumnName)) {
+                throw new IllegalArgumentException("Content column '" + contentColumnName + "' not found in CSV headers: " + csvParser.getHeaderNames());
+            }
+            
+            // Validate that the document ID column exists if specified
+            boolean hasDocIdColumn = docIdColumnName != null && !docIdColumnName.trim().isEmpty();
+            if (hasDocIdColumn && !csvParser.getHeaderNames().contains(docIdColumnName)) {
+                logger.warn("Document ID column '{}' not found in CSV headers: {}. Will generate UUIDs instead.", docIdColumnName, csvParser.getHeaderNames());
+                hasDocIdColumn = false;
+            }
+            
+            int recordCount = 0;
+            for (CSVRecord record : csvParser) {
+                // Check if we've reached the max records limit
+                if (maxRecords != null && recordCount >= maxRecords) {
+                    logger.info("Reached maximum record limit: {}", maxRecords);
+                    break;
+                }
+                
+                try {
+                    String content = record.get(contentColumnName);
+                    if (content == null || content.trim().isEmpty()) {
+                        logger.debug("Skipping record {} with empty content", recordCount + 1);
+                        recordCount++;
+                        continue;
+                    }
+                    
+                    // Determine document ID
+                    String documentId;
+                    if (hasDocIdColumn) {
+                        String csvDocId = record.get(docIdColumnName);
+                        if (csvDocId != null && !csvDocId.trim().isEmpty()) {
+                            documentId = csvDocId.trim();
+                        } else {
+                            documentId = UUID.randomUUID().toString();
+                        }
+                    } else {
+                        documentId = UUID.randomUUID().toString();
+                    }
+                    
+                    // Create metadata from all other columns (excluding content and doc_id)
+                    Map<String, Object> metadata = new HashMap<>();
+                    for (String header : csvParser.getHeaderNames()) {
+                        if (!header.equals(contentColumnName) && (!hasDocIdColumn || !header.equals(docIdColumnName))) {
+                            String value = record.get(header);
+                            if (value != null && !value.trim().isEmpty()) {
+                                metadata.put(header, value.trim());
+                            }
+                        }
+                    }
+                    
+                    // Add record metadata
+                    metadata.put("csv_record_number", recordCount + 1);
+                    metadata.put("csv_file_path", csvFilePath);
+                    if (hasDocIdColumn) {
+                        metadata.put("original_doc_id", documentId);
+                    }
+                    
+                    Document document = new Document(
+                        documentId,
+                        content.trim(),
+                        metadata
+                    );
+                    
+                    if (source != null && !source.trim().isEmpty()) {
+                        document.setSource(source.trim());
+                    }
+                    
+                    batch.add(document);
+                    recordCount++;
+                    
+                    // Process batch when it reaches the specified size
+                    if (batch.size() >= effectiveBatchSize) {
+                        int batchIngested = processBatch(indexName, batch, currentBatch);
+                        totalIngested += batchIngested;
+                        batch.clear();
+                        currentBatch++;
+                        
+                        // Log progress
+                        if (currentBatch % 10 == 0) {
+                            logger.info("Processed {} batches, {} documents ingested so far", currentBatch, totalIngested);
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    logger.error("Error processing CSV record {}: {}", recordCount + 1, e.getMessage(), e);
+                    recordCount++;
+                    // Continue processing other records
+                }
+            }
+            
+            // Process any remaining documents in the final batch
+            if (!batch.isEmpty()) {
+                int batchIngested = processBatch(indexName, batch, currentBatch);
+                totalIngested += batchIngested;
+                currentBatch++;
+            }
+            
+            logger.info("Completed streaming CSV ingestion: processed {} records in {} batches, {} documents ingested", 
+                       recordCount, currentBatch, totalIngested);
+            
+        } catch (IOException e) {
+            logger.error("Error reading CSV file: {}", csvFilePath, e);
+            throw e;
+        }
+        
+        return totalIngested;
+    }
+    
+    private int processBatch(String indexName, List<Document> batch, int batchNumber) {
+        try {
+            logger.debug("Processing batch {} with {} documents", batchNumber, batch.size());
+            vectorStoreService.storeDocuments(indexName, batch);
+            logger.debug("Successfully processed batch {} with {} documents", batchNumber, batch.size());
+            return batch.size();
+        } catch (Exception e) {
+            logger.error("Failed to process batch {} with {} documents: {}", batchNumber, batch.size(), e.getMessage(), e);
+            // For now, we'll return 0 for failed batches
+            // In a production system, you might want to retry or store failed documents separately
+            return 0;
+        }
     }
     
     /**

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, EyeOff, FileText, Clock, User } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, EyeOff, FileText, Clock, User, ExternalLink, X } from 'lucide-react';
 
 const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChange }) => {
   const [expandedResults, setExpandedResults] = useState(new Set());
+  const [fileViewerModal, setFileViewerModal] = useState(null);
+  const [fileContent, setFileContent] = useState(null);
+  const [loadingFile, setLoadingFile] = useState(false);
 
   if (loading) {
     return (
@@ -63,6 +66,53 @@ const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChan
   const truncateText = (text, maxLength = 300) => {
     if (!text) return '';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+
+  const handleFilePathClick = async (filePath) => {
+    try {
+      setLoadingFile(true);
+      setFileViewerModal({ path: filePath });
+      
+      // Encode the file path in base64 for security
+      const encodedPath = btoa(filePath);
+      
+      const response = await fetch(`http://localhost:8080/api/v1/file-viewer/content?path=${encodedPath}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setFileContent(data);
+    } catch (error) {
+      console.error('Error loading file:', error);
+      setFileContent({ error: error.message });
+    } finally {
+      setLoadingFile(false);
+    }
+  };
+
+  const closeFileViewer = () => {
+    setFileViewerModal(null);
+    setFileContent(null);
+  };
+
+  const renderMetadataValue = (key, value) => {
+    // Check if this looks like a file path
+    if (key === 'path' || (typeof value === 'string' && value.match(/^(\/|[A-Za-z]:\\).+\.(txt|pdf|doc|docx|html|htm|xml|rtf|odt|ods|odp|pptx|ppt|xlsx|xls|csv)$/i))) {
+      return (
+        <button
+          onClick={() => handleFilePathClick(value)}
+          className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center space-x-1"
+          title="Click to view file content"
+        >
+          <span>{String(value)}</span>
+          <ExternalLink className="h-3 w-3" />
+        </button>
+      );
+    }
+    
+    return <span className="text-blue-700 ml-1">{String(value)}</span>;
   };
 
   return (
@@ -201,7 +251,7 @@ const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChan
                       {Object.entries(document.metadata).map(([key, value]) => (
                         <div key={key} className="text-sm">
                           <span className="font-medium text-blue-800">{key}:</span>
-                          <span className="text-blue-700 ml-1">{String(value)}</span>
+                          {renderMetadataValue(key, value)}
                         </div>
                       ))}
                     </div>
@@ -212,6 +262,62 @@ const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChan
           );
         })}
       </div>
+      
+      {/* File Viewer Modal */}
+      {fileViewerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">File Viewer</h3>
+              <button
+                onClick={closeFileViewer}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-hidden">
+              {loadingFile ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="loading-dots">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                  </div>
+                  <p className="text-gray-500 ml-4">Loading file...</p>
+                </div>
+              ) : fileContent?.error ? (
+                <div className="p-4 text-center text-red-600">
+                  <p>Error: {fileContent.error}</p>
+                </div>
+              ) : fileContent ? (
+                <div className="p-4 h-full flex flex-col">
+                  {/* File Info */}
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div><span className="font-medium">File:</span> {fileContent.fileName}</div>
+                      <div><span className="font-medium">Size:</span> {fileContent.fileSize} bytes</div>
+                      <div><span className="font-medium">Type:</span> {fileContent.mimeType}</div>
+                      <div><span className="font-medium">Path:</span> {fileContent.filePath}</div>
+                    </div>
+                  </div>
+                  
+                  {/* File Content */}
+                  <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+                    <pre className="p-4 text-sm text-gray-800 whitespace-pre-wrap font-mono">
+                      {fileContent.content}
+                    </pre>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

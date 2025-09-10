@@ -1,6 +1,7 @@
 package com.example.ragservice.controller;
 
 import com.example.ragservice.dto.CsvUploadRequest;
+import com.example.ragservice.dto.CsvFileIngestionRequest;
 import com.example.ragservice.dto.DocumentIngestionRequest;
 import com.example.ragservice.dto.EnhancedSearchResponse;
 import com.example.ragservice.dto.SearchRequest;
@@ -23,6 +24,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +133,67 @@ public class RagController {
             
         } catch (Exception e) {
             logger.error("Failed to ingest CSV documents", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
+     * Ingest documents from CSV file (streaming)
+     */
+    @PostMapping("/documents/csv/file")
+    public ResponseEntity<?> ingestCsvFile(@Valid @RequestBody CsvFileIngestionRequest request) {
+        try {
+            Path csvFile = Paths.get(request.getCsvFilePath());
+            
+            // Validate file exists and is readable
+            if (!Files.exists(csvFile)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "CSV file not found: " + request.getCsvFilePath());
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            if (!Files.isReadable(csvFile)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "CSV file is not readable: " + request.getCsvFilePath());
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Get file size for progress reporting
+            long fileSize = Files.size(csvFile);
+            
+            logger.info("Starting CSV file ingestion: {} (size: {} bytes)", 
+                       request.getCsvFilePath(), fileSize);
+            
+            // Process CSV file in streaming fashion
+            int documentsIngested = csvProcessingService.ingestCsvFile(
+                request.getCsvFilePath(),
+                request.getIndexName(),
+                request.getContentColumnName(),
+                request.getDocIdColumnName(),
+                request.getSource(),
+                request.getBatchSize(),
+                request.getMaxRecords()
+            );
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("documentsIngested", documentsIngested);
+            response.put("indexName", request.getIndexName());
+            response.put("filePath", request.getCsvFilePath());
+            response.put("fileSize", fileSize);
+            
+            logger.info("Successfully ingested {} documents from CSV file {} into index {}", 
+                       documentsIngested, request.getCsvFilePath(), request.getIndexName());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Failed to ingest CSV file: {}", request.getCsvFilePath(), e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("error", e.getMessage());
