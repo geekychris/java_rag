@@ -10,6 +10,9 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
   const [csvFile, setCsvFile] = useState(null);
   const [csvContent, setCsvContent] = useState('');
   const [contentColumnName, setContentColumnName] = useState('content');
+  const [docIdColumnName, setDocIdColumnName] = useState('');
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvPreview, setCsvPreview] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -65,7 +68,48 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
       // Read file content
       const reader = new FileReader();
       reader.onload = (event) => {
-        setCsvContent(event.target.result);
+        const content = event.target.result;
+        setCsvContent(content);
+        
+        // Parse CSV to extract headers and preview
+        try {
+          const lines = content.split('\n').filter(line => line.trim());
+          if (lines.length > 0) {
+            const headers = lines[0].split(',').map(header => header.replace(/"/g, '').trim());
+            setCsvHeaders(headers);
+            
+            // Set default content column if it exists
+            const commonContentColumns = ['content', 'text', 'description', 'body', 'question'];
+            const defaultContentCol = headers.find(h => 
+              commonContentColumns.some(col => h.toLowerCase().includes(col.toLowerCase()))
+            ) || headers[headers.length - 1]; // fallback to last column
+            if (defaultContentCol) {
+              setContentColumnName(defaultContentCol);
+            }
+            
+            // Set default doc ID column if it exists
+            const commonIdColumns = ['id', 'doc_id', 'document_id', 'paper_id', 'article_id', 'uuid'];
+            const defaultIdCol = headers.find(h => 
+              commonIdColumns.some(col => h.toLowerCase().includes(col.toLowerCase()))
+            );
+            if (defaultIdCol) {
+              setDocIdColumnName(defaultIdCol);
+            }
+            
+            // Create preview data (first 3 rows)
+            const previewData = lines.slice(1, 4).map(line => {
+              const values = line.split(',').map(val => val.replace(/"/g, '').trim());
+              const row = {};
+              headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+              });
+              return row;
+            });
+            setCsvPreview(previewData);
+          }
+        } catch (error) {
+          console.error('Error parsing CSV:', error);
+        }
       };
       reader.readAsText(file);
     }
@@ -94,14 +138,27 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
     setSuccess(null);
 
     try {
-      const result = await ragApi.uploadCsv(selectedUploadIndex, csvContent, {
+      const uploadOptions = {
         contentColumnName,
         source: 'ui-upload'
-      });
+      };
       
-      setSuccess(`Successfully uploaded ${result.documentsIndexed || 'documents'} from ${csvFile.name} to index "${selectedUploadIndex}"`);
+      // Include docIdColumnName if specified
+      if (docIdColumnName && docIdColumnName.trim()) {
+        uploadOptions.docIdColumnName = docIdColumnName;
+      }
+      
+      const result = await ragApi.uploadCsv(selectedUploadIndex, csvContent, uploadOptions);
+      
+      setSuccess(`Successfully uploaded ${result.documentsIngested || result.documentsIndexed || 'documents'} from ${csvFile.name} to index "${selectedUploadIndex}"`);
+      
+      // Reset all form state
       setCsvFile(null);
       setCsvContent('');
+      setCsvHeaders([]);
+      setCsvPreview([]);
+      setContentColumnName('content');
+      setDocIdColumnName('');
       setSelectedUploadIndex('');
       setShowUploadCsv(false);
       
@@ -234,7 +291,7 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Upload CSV Documents</h3>
           <form onSubmit={handleUploadCsv} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Target Index
@@ -253,24 +310,54 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
                   ))}
                 </select>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content Column Name
-                </label>
-                <input
-                  type="text"
-                  value={contentColumnName}
-                  onChange={(e) => setContentColumnName(e.target.value)}
-                  placeholder="content"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={loading}
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Name of the CSV column containing the document text
-                </p>
-              </div>
             </div>
+            
+            {csvHeaders.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Content Column *
+                  </label>
+                  <select
+                    value={contentColumnName}
+                    onChange={(e) => setContentColumnName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={loading}
+                  >
+                    {csvHeaders.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Column containing the main document text
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Document ID Column (optional)
+                  </label>
+                  <select
+                    value={docIdColumnName}
+                    onChange={(e) => setDocIdColumnName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={loading}
+                  >
+                    <option value="">Generate automatic IDs</option>
+                    {csvHeaders.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Column containing custom document IDs
+                  </p>
+                </div>
+              </div>
+            )}
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -305,13 +392,91 @@ const IndexManager = ({ onIndexCreated, availableIndexes }) => {
               </div>
             </div>
             
-            {csvFile && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-800">
-                  <strong>Preview:</strong> Ready to upload {csvFile.name} to index "{selectedUploadIndex}"
-                  <br />
-                  Content will be extracted from column: "{contentColumnName}"
-                </p>
+            {csvFile && csvHeaders.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-blue-900 mb-3">CSV File Preview</h4>
+                
+                <div className="space-y-3">
+                  <div className="text-sm text-blue-800">
+                    <strong>File:</strong> {csvFile.name} ({csvHeaders.length} columns)
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <strong className="text-blue-900">Content Column:</strong>
+                      <div className="bg-blue-100 px-2 py-1 rounded mt-1 text-blue-800">
+                        {contentColumnName} → Main searchable content
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <strong className="text-blue-900">Document ID Column:</strong>
+                      <div className="bg-blue-100 px-2 py-1 rounded mt-1 text-blue-800">
+                        {docIdColumnName ? `${docIdColumnName} → Custom document IDs` : 'Auto-generated UUIDs'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <strong className="text-blue-900 text-sm">All Columns to be Indexed:</strong>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-2">
+                      {csvHeaders.map((header) => {
+                        let usage = 'metadata';
+                        if (header === contentColumnName) usage = 'content';
+                        if (header === docIdColumnName) usage = 'doc_id';
+                        
+                        const bgColor = usage === 'content' ? 'bg-green-100 text-green-800' :
+                                       usage === 'doc_id' ? 'bg-purple-100 text-purple-800' :
+                                       'bg-gray-100 text-gray-700';
+                        
+                        return (
+                          <div key={header} className={`px-2 py-1 rounded text-xs ${bgColor}`}>
+                            <div className="font-medium">{header}</div>
+                            <div className="text-xs opacity-75">{usage}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {csvPreview.length > 0 && (
+                    <div>
+                      <strong className="text-blue-900 text-sm">Sample Data (first {csvPreview.length} rows):</strong>
+                      <div className="mt-2 max-h-32 overflow-y-auto">
+                        <table className="min-w-full text-xs">
+                          <thead>
+                            <tr className="bg-blue-100">
+                              {csvHeaders.slice(0, 4).map((header) => (
+                                <th key={header} className="px-2 py-1 text-left text-blue-900 font-medium">
+                                  {header}
+                                </th>
+                              ))}
+                              {csvHeaders.length > 4 && (
+                                <th className="px-2 py-1 text-left text-blue-900 font-medium">...</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {csvPreview.map((row, index) => (
+                              <tr key={index} className="border-b border-blue-200">
+                                {csvHeaders.slice(0, 4).map((header) => (
+                                  <td key={header} className="px-2 py-1 text-blue-800">
+                                    {String(row[header] || '').length > 30 
+                                      ? String(row[header]).substring(0, 30) + '...' 
+                                      : row[header] || ''}
+                                  </td>
+                                ))}
+                                {csvHeaders.length > 4 && (
+                                  <td className="px-2 py-1 text-blue-600">...</td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             

@@ -75,15 +75,23 @@ export const ragApi = {
   uploadCsv: async (indexName, csvContent, options = {}) => {
     const {
       contentColumnName = 'content',
+      docIdColumnName = null,
       source = 'csv-upload',
     } = options;
 
-    const response = await api.post('/api/rag/documents/csv', {
+    const requestBody = {
       indexName,
       csvContent,
       contentColumnName,
       source,
-    });
+    };
+
+    // Only include docIdColumnName if it's specified and not empty
+    if (docIdColumnName && docIdColumnName.trim()) {
+      requestBody.docIdColumnName = docIdColumnName.trim();
+    }
+
+    const response = await api.post('/api/rag/documents/csv', requestBody);
     return response.data;
   },
 

@@ -102,6 +102,7 @@ public class RagController {
             List<Document> documents = csvProcessingService.parseCsvToDocuments(
                 request.getCsvContent(),
                 request.getContentColumnName(),
+                request.getDocIdColumnName(),
                 request.getSource()
             );
             

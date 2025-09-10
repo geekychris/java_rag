@@ -12,6 +12,8 @@ public class CsvUploadRequest {
     
     private String contentColumnName = "content";
     
+    private String docIdColumnName = "doc_id";
+    
     private String source;
 
     public CsvUploadRequest() {}
@@ -20,6 +22,14 @@ public class CsvUploadRequest {
         this.csvContent = csvContent;
         this.indexName = indexName;
         this.contentColumnName = contentColumnName;
+        this.source = source;
+    }
+    
+    public CsvUploadRequest(String csvContent, String indexName, String contentColumnName, String docIdColumnName, String source) {
+        this.csvContent = csvContent;
+        this.indexName = indexName;
+        this.contentColumnName = contentColumnName;
+        this.docIdColumnName = docIdColumnName;
         this.source = source;
     }
 
@@ -45,6 +55,14 @@ public class CsvUploadRequest {
 
     public void setContentColumnName(String contentColumnName) {
         this.contentColumnName = contentColumnName;
+    }
+    
+    public String getDocIdColumnName() {
+        return docIdColumnName;
+    }
+    
+    public void setDocIdColumnName(String docIdColumnName) {
+        this.docIdColumnName = docIdColumnName;
     }
 
     public String getSource() {

@@ -29,6 +29,18 @@ public class CsvProcessingService {
      * @return List of Document objects
      */
     public List<Document> parseCsvToDocuments(String csvContent, String contentColumnName, String source) {
+        return parseCsvToDocuments(csvContent, contentColumnName, null, source);
+    }
+    
+    /**
+     * Parse CSV content and convert to Document objects with optional document ID column
+     * @param csvContent The CSV content as string
+     * @param contentColumnName The name of the column containing the main content
+     * @param docIdColumnName The name of the column containing document IDs (optional)
+     * @param source Optional source identifier for the documents
+     * @return List of Document objects
+     */
+    public List<Document> parseCsvToDocuments(String csvContent, String contentColumnName, String docIdColumnName, String source) {
         List<Document> documents = new ArrayList<>();
         
         try (StringReader stringReader = new StringReader(csvContent);
@@ -45,6 +57,13 @@ public class CsvProcessingService {
                 throw new IllegalArgumentException("Content column '" + contentColumnName + "' not found in CSV headers: " + csvParser.getHeaderNames());
             }
             
+            // Validate that the document ID column exists if specified
+            boolean hasDocIdColumn = docIdColumnName != null && !docIdColumnName.trim().isEmpty();
+            if (hasDocIdColumn && !csvParser.getHeaderNames().contains(docIdColumnName)) {
+                logger.warn("Document ID column '{}' not found in CSV headers: {}. Will generate UUIDs instead.", docIdColumnName, csvParser.getHeaderNames());
+                hasDocIdColumn = false;
+            }
+            
             int recordCount = 0;
             for (CSVRecord record : csvParser) {
                 try {
@@ -54,10 +73,24 @@ public class CsvProcessingService {
                         continue;
                     }
                     
-                    // Create metadata from all other columns
+                    // Determine document ID
+                    String documentId;
+                    if (hasDocIdColumn) {
+                        String csvDocId = record.get(docIdColumnName);
+                        if (csvDocId != null && !csvDocId.trim().isEmpty()) {
+                            documentId = csvDocId.trim();
+                        } else {
+                            logger.warn("Empty document ID in record {}, generating UUID", recordCount + 1);
+                            documentId = UUID.randomUUID().toString();
+                        }
+                    } else {
+                        documentId = UUID.randomUUID().toString();
+                    }
+                    
+                    // Create metadata from all other columns (excluding content and doc_id)
                     Map<String, Object> metadata = new HashMap<>();
                     for (String header : csvParser.getHeaderNames()) {
-                        if (!header.equals(contentColumnName)) {
+                        if (!header.equals(contentColumnName) && (!hasDocIdColumn || !header.equals(docIdColumnName))) {
                             String value = record.get(header);
                             if (value != null && !value.trim().isEmpty()) {
                                 metadata.put(header, value.trim());
@@ -65,11 +98,14 @@ public class CsvProcessingService {
                         }
                     }
                     
-                    // Add record number for reference
+                    // Add record number and original doc_id for reference
                     metadata.put("csv_record_number", recordCount + 1);
+                    if (hasDocIdColumn) {
+                        metadata.put("original_doc_id", documentId);
+                    }
                     
                     Document document = new Document(
-                        UUID.randomUUID().toString(),
+                        documentId,
                         content.trim(),
                         metadata
                     );
