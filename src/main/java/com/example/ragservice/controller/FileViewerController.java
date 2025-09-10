@@ -67,46 +67,43 @@ public class FileViewerController {
             
             logger.debug("File info - Name: {}, Size: {}, MIME: {}", fileName, fileSize, mimeType);
             
-            // For text files, return content as JSON for easier handling in UI
-            if (mimeType.startsWith("text/") || mimeType.equals("application/pdf")) {
-                try {
-                    String content;
-                    if (mimeType.equals("application/pdf")) {
-                        // For PDFs, we'll return metadata only since rendering PDF content as text
-                        // in the browser isn't very useful
-                        content = "[PDF Content - " + fileSize + " bytes]";
-                    } else {
-                        content = Files.readString(filePath);
-                        // Limit content size to prevent memory issues
-                        if (content.length() > 50000) {
-                            content = content.substring(0, 50000) + "\n\n... [Content truncated at 50,000 characters]";
-                        }
+            // Always return JSON for UI consumption
+            String content;
+            try {
+                if (mimeType.startsWith("text/")) {
+                    // For text files, read the actual content
+                    content = Files.readString(filePath);
+                    // Limit content size to prevent memory issues
+                    if (content.length() > 50000) {
+                        content = content.substring(0, 50000) + "\n\n... [Content truncated at 50,000 characters]";
                     }
-                    
-                    Map<String, Object> response = new HashMap<>();
-                    response.put("fileName", fileName);
-                    response.put("filePath", decodedPath);
-                    response.put("fileSize", fileSize);
-                    response.put("mimeType", mimeType);
-                    response.put("content", content);
-                    
-                    return ResponseEntity.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(response);
-                        
-                } catch (IOException e) {
-                    logger.error("Failed to read file content: {}", decodedPath, e);
-                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(Map.of("error", "Failed to read file content: " + e.getMessage()));
+                } else if (mimeType.equals("application/pdf")) {
+                    // For PDFs, return metadata only since rendering PDF content as text
+                    // in the browser isn't very useful
+                    content = "[PDF Content - " + fileSize + " bytes - Click 'Download' to view the PDF file]";
+                } else {
+                    // For other binary files, return a message
+                    content = "[Binary File - " + mimeType + " - " + fileSize + " bytes - Click 'Download' to view the file]";
                 }
-            } else {
-                // For binary files, serve as downloadable resource
-                Resource resource = new FileSystemResource(filePath);
+                
+                Map<String, Object> response = new HashMap<>();
+                response.put("fileName", fileName);
+                response.put("filePath", decodedPath);
+                response.put("fileSize", fileSize);
+                response.put("mimeType", mimeType);
+                response.put("content", content);
+                response.put("isTextFile", mimeType.startsWith("text/"));
+                response.put("isPdfFile", mimeType.equals("application/pdf"));
+                response.put("isBinaryFile", !mimeType.startsWith("text/") && !mimeType.equals("application/pdf"));
                 
                 return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-                    .contentType(MediaType.parseMediaType(mimeType))
-                    .body(resource);
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
+                    
+            } catch (IOException e) {
+                logger.error("Failed to read file content: {}", decodedPath, e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to read file content: " + e.getMessage()));
             }
             
         } catch (IllegalArgumentException e) {
@@ -163,6 +160,58 @@ public class FileViewerController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid path encoding"));
         } catch (Exception e) {
             logger.error("Error getting file info for path: {}", path, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Internal server error: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Downloads a file as binary content
+     * 
+     * @param encodedPath Base64 encoded file path
+     * @return File as downloadable resource
+     */
+    @GetMapping("/download")
+    public ResponseEntity<?> downloadFile(@RequestParam String path) {
+        try {
+            String decodedPath = new String(Base64.getDecoder().decode(path));
+            Path filePath = Paths.get(decodedPath);
+            
+            logger.info("Downloading file: {}", decodedPath);
+            
+            // Security checks
+            if (!Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            if (!Files.isRegularFile(filePath)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Path is not a regular file"));
+            }
+            
+            if (!Files.isReadable(filePath)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "File is not readable"));
+            }
+            
+            String fileName = filePath.getFileName().toString();
+            String mimeType = Files.probeContentType(filePath);
+            
+            if (mimeType == null) {
+                mimeType = "application/octet-stream";
+            }
+            
+            Resource resource = new FileSystemResource(filePath);
+            
+            return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType(mimeType))
+                .body(resource);
+                
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid base64 encoded path for download: {}", path);
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid path encoding"));
+        } catch (Exception e) {
+            logger.error("Error downloading file for path: {}", path, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", "Internal server error: " + e.getMessage()));
         }

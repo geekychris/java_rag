@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, EyeOff, FileText, Clock, User, ExternalLink, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, EyeOff, FileText, Clock, User, ExternalLink, X, Download } from 'lucide-react';
 
 const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChange }) => {
   const [expandedResults, setExpandedResults] = useState(new Set());
@@ -89,6 +89,21 @@ const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChan
       setFileContent({ error: error.message });
     } finally {
       setLoadingFile(false);
+    }
+  };
+
+  const handleDownloadFile = (filePath) => {
+    try {
+      // Encode the file path in base64 for security
+      const encodedPath = btoa(filePath);
+      
+      // Create a download link
+      const downloadUrl = `http://localhost:8080/api/v1/file-viewer/download?path=${encodedPath}`;
+      
+      // Open the download URL in a new window/tab
+      window.open(downloadUrl, '_blank');
+    } catch (error) {
+      console.error('Error downloading file:', error);
     }
   };
 
@@ -308,9 +323,41 @@ const SearchResults = ({ results, loading, error, showVectors, onShowVectorsChan
                   
                   {/* File Content */}
                   <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
-                    <pre className="p-4 text-sm text-gray-800 whitespace-pre-wrap font-mono">
-                      {fileContent.content}
-                    </pre>
+                    {fileContent.isBinaryFile && (
+                      <div className="p-4 text-center">
+                        <div className="mb-4">
+                          <FileText className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                          <p className="text-gray-600 mb-4">{fileContent.content}</p>
+                          <button
+                            onClick={() => handleDownloadFile(fileContent.filePath)}
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download File
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {fileContent.isPdfFile && (
+                      <div className="p-4 text-center">
+                        <div className="mb-4">
+                          <FileText className="mx-auto h-12 w-12 text-red-400 mb-2" />
+                          <p className="text-gray-600 mb-4">{fileContent.content}</p>
+                          <button
+                            onClick={() => handleDownloadFile(fileContent.filePath)}
+                            className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download PDF
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {fileContent.isTextFile && (
+                      <pre className="p-4 text-sm text-gray-800 whitespace-pre-wrap font-mono">
+                        {fileContent.content}
+                      </pre>
+                    )}
                   </div>
                 </div>
               ) : null}
