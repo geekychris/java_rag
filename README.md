@@ -63,6 +63,29 @@ Designed for scalability and production deployment, the service supports local d
 - 📈 **Scalable**: Built on Spring Boot with production-ready patterns
 - 🧪 **Well Tested**: Comprehensive unit and integration tests
 
+The UI looks like so:
+
+![img.png](doc_images/img.png)
+
+With an advanced hybrid search that will blend pure embedding search with classic vector:
+
+![img_1.png](doc_images/img_1.png)
+
+Results include the content view:
+
+![img_2.png](doc_images/img_2.png)
+
+If the index was created with the path field of where the data was crawled from then it is possible to download the original content.  The server has a content retrieval api so no need for the browser to be local to the content repository:
+![img_3.png](doc_images/img_3.png)
+
+You can also create new indices:
+
+![img_4.png](doc_images/img_4.png)
+
+And index new content by selecting the index and uploading a csv:
+
+![img_5.png](doc_images/img_5.png)
+
 ### 🆕 Document Processing Features
 
 - 📁 **Directory Scanning**: Recursive directory scanning with document text extraction

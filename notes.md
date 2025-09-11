@@ -12,3 +12,12 @@ curl -X POST http://localhost:8080/api/v1/document-processing/directory-scan \
 }'
 
 
+# indexing
+curl -X POST http://localhost:8080/api/rag/documents/csv/file \
+-H "Content-Type: application/json" \
+-d '{
+"csvFilePath": "/path/to/output.csv",
+"indexName": "my-docs",
+"contentColumnName": "text",
+"batchSize": 100
+}'
