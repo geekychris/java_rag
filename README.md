@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Java Rag logo" width="180">
+</p>
+
 # RAG Service with Spring Boot AI and OpenSearch
 
 A production-ready Retrieval Augmented Generation (RAG) service built with Spring Boot, Spring AI, and OpenSearch. This service provides enterprise-grade vector-based document storage, retrieval, and search capabilities with comprehensive support for CSV document ingestion, local Llama model integration, and a fully-featured Java client library.
